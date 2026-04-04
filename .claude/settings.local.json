@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo check:*)",
+      "Bash(xargs grep:*)",
+      "Bash(find . -name build.rs -o -name sqlx-data.json -o -name *.sh)"
+    ]
+  }
+}

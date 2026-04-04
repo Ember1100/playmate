@@ -1,0 +1,25 @@
+[package]
+name = "playmate-gateway"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "playmate-gateway"
+path = "src/main.rs"
+
+[dependencies]
+playmate-common = { path = "../playmate-common" }
+playmate-user   = { path = "../playmate-user" }
+playmate-im     = { path = "../playmate-im" }
+playmate-feed   = { path = "../playmate-feed" }
+playmate-match  = { path = "../playmate-match" }
+axum = { workspace = true }
+tokio = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+dotenvy = { workspace = true }
+redis = { workspace = true }
+sqlx = { workspace = true }
+serde_json = { workspace = true }

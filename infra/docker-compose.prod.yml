@@ -1,0 +1,44 @@
+version: '3.8'
+
+# 生产环境基础设施（PostgreSQL + Redis）
+# Rust 服务以 systemd 方式运行，不在此文件管理
+# 启动：docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+
+services:
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: playmate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: playmate
+    ports:
+      - "127.0.0.1:5432:5432"    # 仅本机可访问，不暴露公网
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U playmate -d playmate"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
+    ports:
+      - "127.0.0.1:6379:6379"    # 仅本机可访问，不暴露公网
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pg_data:
+  redis_data:
