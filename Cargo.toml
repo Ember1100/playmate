@@ -12,7 +12,7 @@ resolver = "2"
 [workspace.dependencies]
 axum = { version = "0.7", features = ["ws", "multipart", "macros"] }
 tokio = { version = "1", features = ["full"] }
-sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-native-tls", "uuid", "chrono", "json", "migrate"] }
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono", "json", "migrate"] }
 redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace", "compression-gzip", "request-id"] }

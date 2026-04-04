@@ -19,17 +19,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ── 安装 Rust 工具链 ──────────────────────────────────────────────────────
+      # ── 安装 Rust 工具链（musl 静态编译，不依赖系统库）──────────────────────
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-unknown-linux-gnu
+          targets: x86_64-unknown-linux-musl
 
-      # ── 安装交叉编译链接器 ─────────────────────────────────────────────────────
-      - name: Install cross-compilation tools
+      # ── 安装 musl 工具链 ───────────────────────────────────────────────────────
+      - name: Install musl tools
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y --no-install-recommends gcc-x86-64-linux-gnu
+          sudo apt-get install -y --no-install-recommends musl-tools
 
       # ── Cargo 缓存 ─────────────────────────────────────────────────────────────
       - name: Cache Cargo
@@ -39,18 +39,17 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-musl-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-
+            ${{ runner.os }}-cargo-musl-
 
-      # ── 编译 release 二进制 ───────────────────────────────────────────────────
+      # ── 静态编译 release 二进制 ───────────────────────────────────────────────
       - name: Build release binary
         env:
-          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: x86_64-linux-gnu-gcc
           SQLX_OFFLINE: "true"
         run: |
           cargo build --release --bin playmate-gateway \
-            --target x86_64-unknown-linux-gnu
+            --target x86_64-unknown-linux-musl
 
       # ── 配置 SSH（base64 解码私钥，避免换行符丢失问题）─────────────────────────
       - name: Setup SSH
@@ -64,7 +63,7 @@ jobs:
       - name: Upload binary
         run: |
           scp -i ~/.ssh/deploy_key \
-            target/x86_64-unknown-linux-gnu/release/playmate-gateway \
+            target/x86_64-unknown-linux-musl/release/playmate-gateway \
             root@${{ secrets.SERVER_HOST }}:${REMOTE_BIN_PATH}.new
 
       # ── 上传迁移文件 ───────────────────────────────────────────────────────────
