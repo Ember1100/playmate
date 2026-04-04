@@ -52,32 +52,31 @@ jobs:
           cargo build --release --bin playmate-gateway \
             --target x86_64-unknown-linux-gnu
 
-      # ── 配置 SSH agent（正确处理多行私钥）────────────────────────────────────
-      - name: Setup SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
-
-      # ── 将服务器加入 known_hosts ───────────────────────────────────────────────
-      - name: Add server to known_hosts
-        run: ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts
+      # ── 配置 SSH（base64 解码私钥，避免换行符丢失问题）─────────────────────────
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" | base64 -d > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts
 
       # ── 上传二进制 ─────────────────────────────────────────────────────────────
       - name: Upload binary
         run: |
-          scp target/x86_64-unknown-linux-gnu/release/playmate-gateway \
+          scp -i ~/.ssh/deploy_key \
+            target/x86_64-unknown-linux-gnu/release/playmate-gateway \
             root@${{ secrets.SERVER_HOST }}:${REMOTE_BIN_PATH}.new
 
       # ── 上传迁移文件 ───────────────────────────────────────────────────────────
       - name: Upload migrations
         run: |
-          scp -r infra/migrations/* \
+          scp -i ~/.ssh/deploy_key -r infra/migrations/* \
             root@${{ secrets.SERVER_HOST }}:${REMOTE_MIGRATIONS_PATH}/
 
       # ── 远程执行：迁移 → 热替换 → 重启 → 健康检查 ────────────────────────────
       - name: Deploy on server
         run: |
-          ssh root@${{ secrets.SERVER_HOST }} << 'EOF'
+          ssh -i ~/.ssh/deploy_key root@${{ secrets.SERVER_HOST }} << 'EOF'
             set -e
 
             # 加载环境变量
@@ -117,3 +116,8 @@ jobs:
             journalctl -u playmate -n 50 --no-pager
             exit 1
           EOF
+
+      # ── 清理密钥 ──────────────────────────────────────────────────────────────
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
