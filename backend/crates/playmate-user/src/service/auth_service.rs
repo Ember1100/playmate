@@ -1,5 +1,7 @@
 //! 认证核心业务逻辑
 
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use argon2::password_hash::{rand_core::OsRng, SaltString};
 use chrono::{Datelike, NaiveDate, Utc};
 use rand::Rng;
 
@@ -14,6 +16,73 @@ use crate::{
     repo::user_repo,
     service::{sms_service, token_service, wechat_service},
 };
+
+// ── 邮箱密码注册 / 登录 ───────────────────────────────────────────────────────
+
+pub async fn register_user(
+    state:    &AppState,
+    username: &str,
+    email:    &str,
+    password: &str,
+) -> AppResult<AuthResponse> {
+    if user_repo::username_exists(&state.db, username).await? {
+        return Err(AppError::Business("用户名已被使用".to_string()));
+    }
+    if user_repo::email_exists(&state.db, email).await? {
+        return Err(AppError::Business("邮箱已注册".to_string()));
+    }
+
+    let salt = SaltString::generate(&mut OsRng);
+    let hash = Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("密码加密失败: {}", e)))?
+        .to_string();
+
+    let user = user_repo::create_user_with_email(&state.db, username, email, &hash).await?;
+    let is_new = user.is_new_user;
+    let pair = token_service::create_token_pair(user.id, &user.username, &state.config)?;
+
+    Ok(AuthResponse {
+        access_token:  pair.access_token,
+        refresh_token: pair.refresh_token,
+        token_type:    "Bearer".to_string(),
+        expires_in:    token_service::expires_in(),
+        is_new_user:   is_new,
+        user:          user.into(),
+    })
+}
+
+pub async fn login_with_password(
+    state:    &AppState,
+    email:    &str,
+    password: &str,
+) -> AppResult<AuthResponse> {
+    let user = user_repo::find_by_email(&state.db, email)
+        .await?
+        .ok_or_else(|| AppError::Unauthorized("邮箱或密码错误".to_string()))?;
+
+    let hash_str = user.password_hash.as_deref()
+        .ok_or_else(|| AppError::Unauthorized("该账号未设置密码，请使用其他方式登录".to_string()))?;
+
+    let parsed = PasswordHash::new(hash_str)
+        .map_err(|_| AppError::Internal(anyhow::anyhow!("密码哈希格式错误")))?;
+
+    Argon2::default()
+        .verify_password(password.as_bytes(), &parsed)
+        .map_err(|_| AppError::Unauthorized("邮箱或密码错误".to_string()))?;
+
+    let is_new = user.is_new_user;
+    let pair = token_service::create_token_pair(user.id, &user.username, &state.config)?;
+
+    Ok(AuthResponse {
+        access_token:  pair.access_token,
+        refresh_token: pair.refresh_token,
+        token_type:    "Bearer".to_string(),
+        expires_in:    token_service::expires_in(),
+        is_new_user:   is_new,
+        user:          user.into(),
+    })
+}
 
 // ── 年龄校验 ──────────────────────────────────────────────────────────────────
 

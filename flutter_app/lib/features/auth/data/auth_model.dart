@@ -8,27 +8,30 @@ class UserModel {
     this.bio,
     required this.gender,
     this.birthday,
+    this.isNewUser = false,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
-        id: json['id'] as String,
-        username: json['username'] as String,
-        email: json['email'] as String?,
-        phone: json['phone'] as String?,
+        id:        json['id']       as String,
+        username:  json['username'] as String,
+        email:     json['email']    as String?,
+        phone:     json['phone']    as String?,
         avatarUrl: json['avatar_url'] as String?,
-        bio: json['bio'] as String?,
-        gender: json['gender'] as int? ?? 0,
-        birthday: json['birthday'] as String?,
+        bio:       json['bio']      as String?,
+        gender:    json['gender']   as int? ?? 0,
+        birthday:  json['birthday'] as String?,
+        isNewUser: json['is_new_user'] as bool? ?? false,
       );
 
-  final String id;
-  final String username;
+  final String  id;
+  final String  username;
   final String? email;
   final String? phone;
   final String? avatarUrl;
   final String? bio;
-  final int gender;
+  final int     gender;
   final String? birthday;
+  final bool    isNewUser;
 }
 
 class AuthResponse {

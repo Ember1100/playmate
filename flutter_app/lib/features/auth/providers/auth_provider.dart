@@ -39,6 +39,16 @@ class AuthNotifier extends AsyncNotifier<void> {
     });
   }
 
+  Future<void> devLogin(String phone, String password, {String? username}) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(authRepositoryProvider);
+      final auth = await repo.devLogin(phone: phone, password: password, username: username);
+      ref.read(currentUserProvider.notifier).state = auth.user;
+      ref.invalidate(isLoggedInProvider);
+    });
+  }
+
   Future<void> register(String username, String email, String password) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {

@@ -11,7 +11,7 @@ use crate::model::user::{CareerProfile, Tag, User, UserOauth, UserStats};
 // ── 列列表 ────────────────────────────────────────────────────────────────────
 
 const USER_COLS: &str =
-    "id, username, phone, password_hash, avatar_url, bio,
+    "id, username, email, phone, password_hash, avatar_url, bio,
      gender, birthday, is_verified, is_new_user, is_active, last_seen_at,
      created_at, updated_at";
 
@@ -40,6 +40,25 @@ pub async fn find_by_phone(pool: &PgPool, phone: &str) -> AppResult<Option<User>
     .map_err(AppError::Database)
 }
 
+pub async fn find_by_email(pool: &PgPool, email: &str) -> AppResult<Option<User>> {
+    sqlx::query_as::<_, User>(&format!(
+        "SELECT {USER_COLS} FROM users WHERE email = $1 AND is_active = true"
+    ))
+    .bind(email)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::Database)
+}
+
+pub async fn email_exists(pool: &PgPool, email: &str) -> AppResult<bool> {
+    let row: (bool,) =
+        sqlx::query_as("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)")
+            .bind(email)
+            .fetch_one(pool)
+            .await?;
+    Ok(row.0)
+}
+
 pub async fn username_exists(pool: &PgPool, username: &str) -> AppResult<bool> {
     let row: (bool,) =
         sqlx::query_as("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)")
@@ -60,6 +79,36 @@ pub async fn create_user_with_phone(pool: &PgPool, username: &str, phone: &str) 
     ))
     .bind(username)
     .bind(phone)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    sqlx::query(
+        "INSERT INTO user_stats (user_id, credit_score) VALUES ($1, 750) ON CONFLICT DO NOTHING",
+    )
+    .bind(user.id)
+    .execute(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(user)
+}
+
+/// 邮箱+密码注册，同时创建 user_stats
+pub async fn create_user_with_email(
+    pool:          &PgPool,
+    username:      &str,
+    email:         &str,
+    password_hash: &str,
+) -> AppResult<User> {
+    let user = sqlx::query_as::<_, User>(&format!(
+        "INSERT INTO users (username, email, password_hash, is_verified)
+         VALUES ($1, $2, $3, true)
+         RETURNING {USER_COLS}"
+    ))
+    .bind(username)
+    .bind(email)
+    .bind(password_hash)
     .fetch_one(pool)
     .await
     .map_err(AppError::Database)?;

@@ -44,6 +44,28 @@ class AuthRepository {
     }
   }
 
+  /// 开发环境快速登录（phone = 手机号，password = DEV_PASSWORD）
+  Future<AuthResponse> devLogin({
+    required String phone,
+    required String password,
+    String? username,
+  }) async {
+    try {
+      final resp = await _client.post<Map<String, dynamic>>(
+        '/auth/dev/login',
+        data: {'phone': phone, 'password': password, if (username != null) 'username': username},
+      );
+      final auth = AuthResponse.fromJson(resp['data'] as Map<String, dynamic>);
+      await _storage.saveTokens(
+        accessToken: auth.accessToken,
+        refreshToken: auth.refreshToken,
+      );
+      return auth;
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   Future<void> logout() async {
     try {
       await _client.post('/auth/logout');

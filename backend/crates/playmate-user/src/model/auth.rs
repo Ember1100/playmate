@@ -9,13 +9,32 @@ use crate::model::user::{CareerProfile, User, UserStats};
 
 // ── Auth Requests ────────────────────────────────────────────────────────────
 
+#[derive(Deserialize, Validate)]
+pub struct RegisterRequest {
+    #[validate(length(min = 2, max = 32, message = "用户名长度 2-32 位"))]
+    pub username: String,
+    #[validate(email(message = "邮箱格式不正确"))]
+    pub email: String,
+    #[validate(length(min = 6, max = 72, message = "密码长度 6-72 位"))]
+    pub password: String,
+}
+
+#[derive(Deserialize, Validate)]
+pub struct LoginRequest {
+    #[validate(email(message = "邮箱格式不正确"))]
+    pub email: String,
+    #[validate(length(min = 1, message = "请输入密码"))]
+    pub password: String,
+}
+
 /// 开发环境专用：免短信验证码直接登录 / 注册
 /// 仅在环境变量 DEV_MODE=true 时生效
 #[derive(Deserialize)]
 pub struct DevLoginRequest {
+    pub phone:    String,
+    pub password: String,          // 需与服务器 DEV_PASSWORD 环境变量匹配
     #[serde(default)]
     pub username: Option<String>,
-    pub phone:    String,
 }
 
 #[derive(Deserialize, Validate)]
@@ -105,6 +124,7 @@ fn default_feedback_type() -> String { "suggestion".to_string() }
 pub struct UserResponse {
     pub id:          Uuid,
     pub username:    String,
+    pub email:       Option<String>,
     pub phone:       Option<String>,
     pub avatar_url:  Option<String>,
     pub bio:         Option<String>,
@@ -120,6 +140,7 @@ impl From<User> for UserResponse {
         Self {
             id:          u.id,
             username:    u.username,
+            email:       u.email,
             phone:       u.phone,
             avatar_url:  u.avatar_url,
             bio:         u.bio,

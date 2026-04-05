@@ -12,6 +12,8 @@ use crate::handler::{auth, feedback, note, notification, profile, questionnaire,
 /// 认证路由（无需 JWT）
 pub fn auth_routes() -> Router<AppState> {
     Router::new()
+        .route("/register",     post(auth::register))
+        .route("/login",        post(auth::login))
         .route("/sms/send",     post(auth::send_sms))
         .route("/sms/verify",   post(auth::verify_sms))
         .route("/wechat/login", post(auth::wechat_login))

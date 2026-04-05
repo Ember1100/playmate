@@ -14,10 +14,30 @@ use validator::Validate;
 use playmate_common::{error::AppError, response::ApiResponse, AppState, CurrentUser};
 
 use crate::{
-    model::auth::{DevLoginRequest, RefreshRequest, SmsCodeRequest, SmsVerifyRequest, WechatLoginRequest},
+    model::auth::{DevLoginRequest, LoginRequest, RefreshRequest, RegisterRequest, SmsCodeRequest, SmsVerifyRequest, WechatLoginRequest},
     repo::user_repo,
     service::{auth_service, sms_service},
 };
+
+/// 邮箱密码注册
+pub async fn register(
+    State(state): State<AppState>,
+    Json(payload): Json<RegisterRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    payload.validate().map_err(|e| AppError::BadRequest(e.to_string()))?;
+    let resp = auth_service::register_user(&state, &payload.username, &payload.email, &payload.password).await?;
+    Ok(ApiResponse::ok(resp))
+}
+
+/// 邮箱密码登录
+pub async fn login(
+    State(state): State<AppState>,
+    Json(payload): Json<LoginRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    payload.validate().map_err(|e| AppError::BadRequest(e.to_string()))?;
+    let resp = auth_service::login_with_password(&state, &payload.email, &payload.password).await?;
+    Ok(ApiResponse::ok(resp))
+}
 
 /// 发送短信验证码
 pub async fn send_sms(
@@ -75,9 +95,13 @@ pub async fn dev_login(
     State(state): State<AppState>,
     Json(payload): Json<DevLoginRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let dev_mode = std::env::var("DEV_MODE").unwrap_or_default();
-    if dev_mode != "true" {
+    if std::env::var("DEV_MODE").unwrap_or_default() != "true" {
         return Err(AppError::NotFound("接口不存在".to_string()));
+    }
+    // 校验开发密码（DEV_PASSWORD 环境变量，未设置则默认 "dev123"）
+    let dev_password = std::env::var("DEV_PASSWORD").unwrap_or_else(|_| "dev123".to_string());
+    if payload.password != dev_password {
+        return Err(AppError::Unauthorized("开发密码错误".to_string()));
     }
     let resp = auth_service::dev_login(
         &state,
