@@ -163,8 +163,8 @@ pub async fn list_conversations_full(
         .map(|(cid, content, at, unread)| (cid, (content, at, unread)))
         .collect();
 
-    // Step 5: 组装结果
-    let result = convs
+    // Step 5: 组装结果，按最新消息时间降序排列（无消息的会话排最后）
+    let mut result: Vec<ConversationFull> = convs
         .into_iter()
         .map(|c| {
             let other_uid = other_map.get(&c.id).copied();
@@ -190,6 +190,12 @@ pub async fn list_conversations_full(
             }
         })
         .collect();
+
+    result.sort_by(|a, b| {
+        let ta = a.last_message_at.unwrap_or(a.created_at);
+        let tb = b.last_message_at.unwrap_or(b.created_at);
+        tb.cmp(&ta)
+    });
 
     Ok(result)
 }
