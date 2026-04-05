@@ -115,6 +115,26 @@ pub async fn toggle_like(
     Ok(ApiResponse::ok(LikeResponse { liked, like_count }))
 }
 
+/// 获取当前用户自己发布的帖子
+pub async fn list_my_posts(
+    State(state): State<AppState>,
+    Query(q): Query<FeedQuery>,
+    current_user: CurrentUser,
+) -> Result<impl IntoResponse, AppError> {
+    let limit = q.limit.clamp(1, 50);
+    let offset = (q.page - 1) * limit;
+    let total = repository::count_my_posts(&state.db, current_user.id).await?;
+    let posts = repository::list_my_posts_with_user(&state.db, current_user.id, limit, offset).await?;
+    let items: Vec<crate::dto::PostResponse> = posts.into_iter().map(Into::into).collect();
+    Ok(ApiResponse::ok(PageResponse {
+        has_more: offset + limit < total,
+        total,
+        page: q.page,
+        limit,
+        items,
+    }))
+}
+
 /// 获取当前用户点赞的帖子
 pub async fn list_liked_posts(
     State(state): State<AppState>,

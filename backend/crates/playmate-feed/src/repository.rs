@@ -294,6 +294,56 @@ pub async fn create_comment(pool: &PgPool, post_id: Uuid, user_id: Uuid, content
     Ok(row)
 }
 
+/// 获取当前用户自己发布的帖子
+pub async fn list_my_posts_with_user(
+    pool: &PgPool,
+    user_id: Uuid,
+    limit: i64,
+    offset: i64,
+) -> AppResult<Vec<PostWithUser>> {
+    let posts = sqlx::query_as::<_, Post>(
+        "SELECT id, user_id, content, media_urls, like_count, comment_count, visibility, created_at
+         FROM posts WHERE user_id = $1
+         ORDER BY created_at DESC
+         LIMIT $2 OFFSET $3",
+    )
+    .bind(user_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    if posts.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let user_row = sqlx::query_as::<_, (String, Option<String>)>(
+        "SELECT username, avatar_url FROM users WHERE id = $1",
+    )
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    let (username, avatar_url) = user_row
+        .unwrap_or_else(|| (user_id.to_string()[..8].to_string(), None));
+
+    Ok(posts.into_iter().map(|post| PostWithUser {
+        post,
+        username: username.clone(),
+        avatar_url: avatar_url.clone(),
+    }).collect())
+}
+
+pub async fn count_my_posts(pool: &PgPool, user_id: Uuid) -> AppResult<i64> {
+    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_one(pool)
+        .await?;
+    Ok(row.0)
+}
+
 pub async fn count_liked_posts(pool: &PgPool, user_id: Uuid) -> AppResult<i64> {
     let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM post_likes WHERE user_id = $1")
         .bind(user_id)
