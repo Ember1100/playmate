@@ -85,16 +85,21 @@ class ProfileScreen extends ConsumerWidget {
                             CircleAvatar(
                               radius: 38,
                               backgroundColor: Colors.white,
-                              child: Text(
-                                user?.username.isNotEmpty == true
-                                    ? user!.username[0].toUpperCase()
-                                    : 'U',
-                                style: const TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.primary,
-                                ),
-                              ),
+                              backgroundImage: user?.avatarUrl != null
+                                  ? NetworkImage(user!.avatarUrl!)
+                                  : null,
+                              child: user?.avatarUrl == null
+                                  ? Text(
+                                      user?.username.isNotEmpty == true
+                                          ? user!.username[0].toUpperCase()
+                                          : 'U',
+                                      style: const TextStyle(
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.primary,
+                                      ),
+                                    )
+                                  : null,
                             ),
                             const SizedBox(width: 16),
                             Expanded(

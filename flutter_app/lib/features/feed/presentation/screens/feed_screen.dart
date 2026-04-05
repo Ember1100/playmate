@@ -201,14 +201,19 @@ class _PostCardState extends State<_PostCard> {
               CircleAvatar(
                 radius: 22,
                 backgroundColor: widget.avatarColor,
-                child: Text(
-                  post.username.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                backgroundImage: post.avatarUrl != null
+                    ? NetworkImage(post.avatarUrl!)
+                    : null,
+                child: post.avatarUrl == null
+                    ? Text(
+                        post.username.substring(0, 1).toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 10),
               Expanded(
