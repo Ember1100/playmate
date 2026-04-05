@@ -4,6 +4,7 @@
 
 | 日期 | 章节 | 变更内容 |
 |------|------|---------|
+| 2026-04-05 | 对象存储规范 | 新增MinIO开发/OSS生产策略、S3接入代码、docker-compose配置 |
 | 2026-04-04 | 认证方式规范 | 新增短信验证码/微信登录/user_oauth表/新增环境变量 |
 | 2026-04-04 | Flutter 客户端规范 | 新增项目结构/状态管理/路由/设计规范/页面UI描述 |
 | 2026-04-04 | 初始版本 | 后端架构/数据库表/WebSocket/JWT/Redis规范 |
@@ -1103,3 +1104,213 @@ pub struct AppConfig {
 | 微信换 openid | `reqwest` GET `api.weixin.qq.com/sns/oauth2/access_token` |
 | 验证码生成 | `rand::thread_rng().gen_range(100000..999999).to_string()` |
 | 第三方登录绑定 | `user_oauth` 表，provider + provider_id 唯一索引 |
+
+---
+
+## 对象存储规范
+
+### 策略：开发用 MinIO，生产换阿里云 OSS
+
+代码只写一套 S3 兼容接口，通过环境变量切换，上线时**零代码改动**。
+
+```
+开发环境：MinIO（本地 Docker）
+生产环境：阿里云 OSS（S3 兼容模式）
+```
+
+### docker-compose.yml 新增 MinIO
+
+```yaml
+# 追加到 infra/docker-compose.yml 的 services 里
+  minio:
+    image: minio/minio:latest
+    container_name: playmate-minio
+    restart: always
+    ports:
+      - "9000:9000"    # API 端口
+      - "9001:9001"    # 控制台端口
+    environment:
+      MINIO_ROOT_USER: playmate
+      MINIO_ROOT_PASSWORD: playmate123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+# volumes 里追加
+  minio_data:
+```
+
+启动后访问 http://localhost:9001，用 playmate / playmate123 登录，手动创建 bucket：`avatars`、`posts`、`voices`。
+
+### Cargo.toml 新增依赖
+
+```toml
+# workspace.dependencies 追加
+aws-sdk-s3 = "1"
+aws-config = { version = "1", default-features = false, features = ["behavior-version-latest"] }
+tokio-multipart = "0.1"   # 文件上传解析
+```
+
+### 存储服务封装（playmate-common/src/storage.rs）
+
+```rust
+//! 对象存储服务封装
+//! 兼容 MinIO（开发）和阿里云 OSS（生产），通过环境变量切换
+
+use aws_sdk_s3::{Client, Config};
+use aws_sdk_s3::config::{Credentials, Region};
+use uuid::Uuid;
+
+pub struct StorageService {
+    client: Client,
+    bucket_prefix: String,  // 可选前缀，区分环境
+}
+
+impl StorageService {
+    pub async fn from_config(config: &AppConfig) -> Self {
+        let creds = Credentials::new(
+            &config.storage_access_key,
+            &config.storage_secret_key,
+            None, None, "playmate",
+        );
+
+        let s3_config = Config::builder()
+            .endpoint_url(&config.storage_endpoint)
+            .credentials_provider(creds)
+            .region(Region::new(config.storage_region.clone()))
+            .force_path_style(true)   // MinIO 必须开启，OSS 也兼容
+            .build();
+
+        Self {
+            client: Client::from_conf(s3_config),
+            bucket_prefix: config.storage_bucket_prefix.clone(),
+        }
+    }
+
+    /// 上传文件，返回公开访问 URL
+    pub async fn upload(
+        &self,
+        bucket: &str,          // "avatars" | "posts" | "voices"
+        data: Vec<u8>,
+        content_type: &str,    // "image/jpeg" | "image/png" | "audio/m4a"
+    ) -> AppResult<String> {
+        let key = format!("{}/{}.{}", 
+            chrono::Utc::now().format("%Y/%m/%d"),
+            Uuid::new_v4(),
+            mime_to_ext(content_type),
+        );
+
+        self.client
+            .put_object()
+            .bucket(bucket)
+            .key(&key)
+            .body(data.into())
+            .content_type(content_type)
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("上传失败: {}", e)))?;
+
+        // 返回可访问的 URL
+        Ok(format!("{}/{}/{}", self.endpoint_public_url, bucket, key))
+    }
+
+    /// 删除文件
+    pub async fn delete(&self, bucket: &str, key: &str) -> AppResult<()> {
+        self.client
+            .delete_object()
+            .bucket(bucket)
+            .key(key)
+            .send()
+            .await
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("删除失败: {}", e)))?;
+        Ok(())
+    }
+}
+
+fn mime_to_ext(mime: &str) -> &str {
+    match mime {
+        "image/jpeg" => "jpg",
+        "image/png"  => "png",
+        "image/webp" => "webp",
+        "audio/m4a"  => "m4a",
+        "audio/mpeg" => "mp3",
+        "video/mp4"  => "mp4",
+        _            => "bin",
+    }
+}
+```
+
+### Bucket 规划
+
+| Bucket | 用途 | 文件类型 |
+|--------|------|---------|
+| `avatars` | 用户头像 | jpg / png / webp |
+| `posts` | 动态图片/视频 | jpg / png / mp4 |
+| `voices` | 语音消息 | m4a / mp3 |
+
+### 环境变量
+
+```bash
+# 开发环境（MinIO）
+STORAGE_ENDPOINT=http://localhost:9000
+STORAGE_PUBLIC_ENDPOINT=http://localhost:9000
+STORAGE_ACCESS_KEY=playmate
+STORAGE_SECRET_KEY=playmate123
+STORAGE_REGION=us-east-1
+
+# 生产环境（阿里云 OSS）—— 只改这几行，代码不动
+# STORAGE_ENDPOINT=https://oss-cn-hangzhou-internal.aliyuncs.com  # 内网节点（服务器访问免费）
+# STORAGE_PUBLIC_ENDPOINT=https://你的bucket.oss-cn-hangzhou.aliyuncs.com
+# STORAGE_ACCESS_KEY=阿里云AccessKeyId
+# STORAGE_SECRET_KEY=阿里云AccessKeySecret
+# STORAGE_REGION=cn-hangzhou
+```
+
+### AppConfig 补充字段
+
+```rust
+pub struct AppConfig {
+    // ... 原有字段 ...
+    pub storage_endpoint: String,
+    pub storage_public_endpoint: String,
+    pub storage_access_key: String,
+    pub storage_secret_key: String,
+    pub storage_region: String,
+}
+```
+
+### AppState 补充
+
+```rust
+#[derive(Clone)]
+pub struct AppState {
+    pub db: PgPool,
+    pub redis: ConnectionManager,
+    pub config: Arc<AppConfig>,
+    pub storage: Arc<StorageService>,   // ← 新增
+}
+```
+
+### 文件上传接口规范
+
+```
+POST /api/v1/upload/avatar   → 头像上传，返回 avatar_url
+POST /api/v1/upload/post     → 动态图片/视频，返回 media_url
+POST /api/v1/upload/voice    → 语音消息，返回 voice_url
+
+限制：
+- 图片最大 5MB，支持 jpg/png/webp
+- 视频最大 50MB，支持 mp4
+- 语音最大 10MB，支持 m4a/mp3
+- 上传接口需要 JWT 认证
+```
+
+### 快速参考补充
+
+| 需求 | 方案 |
+|------|------|
+| 本地对象存储 | MinIO Docker（端口9000/9001） |
+| 生产对象存储 | 阿里云 OSS（内网节点，免流量费） |
+| S3 客户端 | `aws-sdk-s3` crate，`force_path_style=true` |
+| 文件名生成 | `年/月/日/{uuid}.{ext}` 防冲突 |
+| 切换环境 | 只改 STORAGE_* 环境变量，代码零改动 |

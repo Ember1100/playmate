@@ -1,8 +1,12 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../core/api/api_client.dart';
+import '../../../../core/services/upload_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/data/auth_model.dart';
 import '../../../auth/providers/auth_provider.dart';
@@ -20,12 +24,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _saving = false;
 
+  File? _avatarFile;        // 本地选中的头像文件
+  String? _avatarUrl;       // 当前已有的 avatar_url
+
   @override
   void initState() {
     super.initState();
     final user = ref.read(currentUserProvider);
     _usernameController = TextEditingController(text: user?.username ?? '');
     _bioController = TextEditingController(text: user?.bio ?? '');
+    _avatarUrl = user?.avatarUrl;
   }
 
   @override
@@ -35,16 +43,36 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     super.dispose();
   }
 
+  Future<void> _pickAvatar() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 800,
+    );
+    if (picked != null && mounted) {
+      setState(() => _avatarFile = File(picked.path));
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
+      String? newAvatarUrl = _avatarUrl;
+
+      // 如果选了新头像，先上传
+      if (_avatarFile != null) {
+        newAvatarUrl = await ref.read(uploadServiceProvider).uploadAvatar(_avatarFile!);
+      }
+
       final client = ref.read(apiClientProvider);
       final resp = await client.put<Map<String, dynamic>>(
         '/users/me',
         data: {
           'username': _usernameController.text.trim(),
           'bio': _bioController.text.trim(),
+          if (newAvatarUrl != null) 'avatar_url': newAvatarUrl,
         },
       );
       final user = UserModel.fromJson(resp['data'] as Map<String, dynamic>);
@@ -103,42 +131,56 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           children: [
             // 头像
             Center(
-              child: Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 44,
-                    backgroundColor: AppColors.primary,
-                    child: Text(
-                      (_usernameController.text.isNotEmpty
-                              ? _usernameController.text
-                              : 'U')
-                          .substring(0, 1)
-                          .toUpperCase(),
-                      style: const TextStyle(
-                          fontSize: 32,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700),
+              child: GestureDetector(
+                onTap: _pickAvatar,
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 44,
+                      backgroundColor: AppColors.primary,
+                      backgroundImage: _avatarFile != null
+                          ? FileImage(_avatarFile!) as ImageProvider
+                          : (_avatarUrl != null ? NetworkImage(_avatarUrl!) : null),
+                      child: (_avatarFile == null && _avatarUrl == null)
+                          ? Text(
+                              (_usernameController.text.isNotEmpty
+                                      ? _usernameController.text
+                                      : 'U')
+                                  .substring(0, 1)
+                                  .toUpperCase(),
+                              style: const TextStyle(
+                                  fontSize: 32,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700),
+                            )
+                          : null,
                     ),
-                  ),
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(Icons.camera_alt,
+                            color: Colors.white, size: 14),
                       ),
-                      child: const Icon(Icons.camera_alt,
-                          color: Colors.white, size: 14),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 8),
+            const Center(
+              child: Text('点击更换头像',
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary)),
+            ),
+            const SizedBox(height: 28),
 
             const Text('昵称',
                 style: TextStyle(

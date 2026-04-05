@@ -21,8 +21,9 @@ class ImRepository {
       '/im/conversations/$conversationId/messages',
       params: {'page': page},
     );
-    final data = resp['data'] as List<dynamic>? ?? [];
-    return data
+    final pageData = resp['data'] as Map<String, dynamic>? ?? {};
+    final items = pageData['items'] as List<dynamic>? ?? [];
+    return items
         .map((e) => Message.fromJson(e as Map<String, dynamic>))
         .toList();
   }

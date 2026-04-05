@@ -17,10 +17,10 @@ class FeedRepository {
     return items.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<Post> createPost(String content) async {
+  Future<Post> createPost(String content, {List<String> mediaUrls = const []}) async {
     final resp = await _client.post<Map<String, dynamic>>(
       '/feed/posts',
-      data: {'content': content},
+      data: {'content': content, 'media_urls': mediaUrls},
     );
     return Post.fromJson(resp['data'] as Map<String, dynamic>);
   }

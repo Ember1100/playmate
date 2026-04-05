@@ -46,7 +46,7 @@ class Message {
         id: json['id'] as String,
         conversationId: json['conversation_id'] as String,
         senderId: json['sender_id'] as String,
-        type: json['type'] as int? ?? 1,
+        type: json['msg_type'] as int? ?? json['type'] as int? ?? 1,
         content: json['content'] as String?,
         mediaUrl: json['media_url'] as String?,
         createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??

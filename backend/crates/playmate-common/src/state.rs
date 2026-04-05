@@ -8,7 +8,7 @@ use std::sync::Arc;
 use redis::aio::ConnectionManager;
 use sqlx::PgPool;
 
-use crate::{config::AppConfig, hub::ConnectionHub};
+use crate::{config::AppConfig, hub::ConnectionHub, storage::StorageService};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -16,4 +16,5 @@ pub struct AppState {
     pub redis: ConnectionManager,
     pub config: Arc<AppConfig>,
     pub hub: Arc<ConnectionHub>,
+    pub storage: Arc<StorageService>,
 }

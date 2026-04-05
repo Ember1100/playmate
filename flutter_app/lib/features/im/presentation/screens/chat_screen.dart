@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/api/api_client.dart';
+import '../../../../core/services/upload_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../data/im_model.dart';
@@ -28,6 +31,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   StreamSubscription<Map<String, dynamic>>? _wsSub;
+  bool _uploadingImage = false;
 
   @override
   void initState() {
@@ -88,7 +92,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
-  Future<void> _sendMessage() async {
+  Future<void> _sendTextMessage() async {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
 
@@ -102,7 +106,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     _textController.clear();
 
-    // 本地乐观显示
     final currentUser = ref.read(currentUserProvider);
     final tempMsg = Message(
       id: 'temp_${DateTime.now().millisecondsSinceEpoch}',
@@ -118,13 +121,69 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         .addMessage(tempMsg);
     _scrollToBottom();
 
-    // 通过 WebSocket 发送（服务端存库 + 推送对方）
     wsService.sendMessage({
       'type': 'send_message',
       'conversation_id': widget.conversationId,
       'msg_type': 1,
       'content': text,
     });
+  }
+
+  Future<void> _sendImageMessage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (picked == null || !mounted) return;
+
+    final wsService = ref.read(wsServiceProvider);
+    if (!wsService.isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('连接中，请稍后重试')),
+      );
+      return;
+    }
+
+    setState(() => _uploadingImage = true);
+
+    try {
+      final url = await ref
+          .read(uploadServiceProvider)
+          .uploadPostImage(File(picked.path));
+
+      if (!mounted) return;
+
+      final currentUser = ref.read(currentUserProvider);
+      final tempMsg = Message(
+        id: 'temp_img_${DateTime.now().millisecondsSinceEpoch}',
+        conversationId: widget.conversationId,
+        senderId: currentUser?.id ?? 'me',
+        type: 2,
+        mediaUrl: url,
+        createdAt: DateTime.now(),
+        isRecalled: false,
+      );
+      ref
+          .read(chatNotifierProvider(widget.conversationId).notifier)
+          .addMessage(tempMsg);
+      _scrollToBottom();
+
+      wsService.sendMessage({
+        'type': 'send_message',
+        'conversation_id': widget.conversationId,
+        'msg_type': 2,
+        'media_url': url,
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('图片发送失败，请重试')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
+    }
   }
 
   @override
@@ -156,7 +215,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               style: const TextStyle(fontSize: 16),
             ),
             const SizedBox(width: 6),
-            // Online indicator
             Container(
               width: 8,
               height: 8,
@@ -176,7 +234,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
       body: Column(
         children: [
-          // Messages
+          // 消息列表
           Expanded(
             child: messagesAsync.when(
               loading: () =>
@@ -210,7 +268,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               },
             ),
           ),
-          // Input bar
+
+          // 图片上传进度条
+          if (_uploadingImage)
+            const LinearProgressIndicator(
+              backgroundColor: AppColors.border,
+              color: AppColors.primary,
+              minHeight: 2,
+            ),
+
+          // 输入栏
           Container(
             decoration: const BoxDecoration(
               color: Colors.white,
@@ -224,11 +291,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               top: false,
               child: Row(
                 children: [
+                  // 图片按钮
                   IconButton(
-                    icon: const Icon(Icons.sentiment_satisfied_alt_outlined,
+                    icon: const Icon(Icons.image_outlined,
                         color: AppColors.textSecondary),
-                    onPressed: () {},
+                    onPressed: _uploadingImage ? null : _sendImageMessage,
                   ),
+                  // 文本输入框
                   Expanded(
                     child: TextField(
                       controller: _textController,
@@ -254,12 +323,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         ),
                       ),
                       textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _sendMessage(),
+                      onSubmitted: (_) => _sendTextMessage(),
                     ),
                   ),
                   const SizedBox(width: 8),
+                  // 发送按钮
                   GestureDetector(
-                    onTap: _sendMessage,
+                    onTap: _sendTextMessage,
                     child: Container(
                       width: 40,
                       height: 40,
@@ -323,52 +393,32 @@ class _MessageBubble extends StatelessWidget {
                   constraints: BoxConstraints(
                     maxWidth: MediaQuery.of(context).size.width * 0.65,
                   ),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isMe
-                        ? AppColors.primary
-                        : const Color(0xFFF0F0F5),
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(18),
-                      topRight: const Radius.circular(18),
-                      bottomLeft: Radius.circular(isMe ? 18 : 4),
-                      bottomRight: Radius.circular(isMe ? 4 : 18),
-                    ),
-                  ),
-                  child: message.isRecalled
-                      ? Text(
-                          '消息已撤回',
-                          style: TextStyle(
-                            color: isMe
-                                ? Colors.white70
-                                : AppColors.textSecondary,
-                            fontSize: 14,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        )
-                      : Text(
-                          message.content ?? '',
-                          style: TextStyle(
-                            color: isMe
-                                ? Colors.white
-                                : AppColors.textPrimary,
-                            fontSize: 15,
+                  padding: message.type == 2
+                      ? EdgeInsets.zero
+                      : const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                  decoration: message.type == 2
+                      ? null
+                      : BoxDecoration(
+                          color: isMe
+                              ? AppColors.primary
+                              : const Color(0xFFF0F0F5),
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(18),
+                            topRight: const Radius.circular(18),
+                            bottomLeft: Radius.circular(isMe ? 18 : 4),
+                            bottomRight: Radius.circular(isMe ? 4 : 18),
                           ),
                         ),
+                  child: _buildContent(isMe),
                 ),
               ),
-              if (isMe) ...[
-                const SizedBox(width: 8),
-              ],
+              if (isMe) const SizedBox(width: 8),
             ],
           ),
           const SizedBox(height: 2),
           Padding(
-            padding: EdgeInsets.only(
-              left: isMe ? 0 : 40,
-              right: isMe ? 0 : 0,
-            ),
+            padding: EdgeInsets.only(left: isMe ? 0 : 40),
             child: Text(
               timeStr,
               style: const TextStyle(
@@ -378,6 +428,61 @@ class _MessageBubble extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildContent(bool isMe) {
+    if (message.isRecalled) {
+      return Text(
+        '消息已撤回',
+        style: TextStyle(
+          color: isMe ? Colors.white70 : AppColors.textSecondary,
+          fontSize: 14,
+          fontStyle: FontStyle.italic,
+        ),
+      );
+    }
+
+    // 图片消息
+    if (message.type == 2 && message.mediaUrl != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.only(
+          topLeft: const Radius.circular(12),
+          topRight: const Radius.circular(12),
+          bottomLeft: Radius.circular(isMe ? 12 : 4),
+          bottomRight: Radius.circular(isMe ? 4 : 12),
+        ),
+        child: Image.network(
+          message.mediaUrl!,
+          width: 180,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Container(
+              width: 180,
+              height: 120,
+              color: AppColors.background,
+              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) => Container(
+            width: 180,
+            height: 120,
+            color: AppColors.background,
+            child: const Icon(Icons.broken_image,
+                color: AppColors.textSecondary),
+          ),
+        ),
+      );
+    }
+
+    // 文本消息
+    return Text(
+      message.content ?? '',
+      style: TextStyle(
+        color: isMe ? Colors.white : AppColors.textPrimary,
+        fontSize: 15,
       ),
     );
   }

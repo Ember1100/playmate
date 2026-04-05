@@ -51,10 +51,11 @@ class FeedNotifier extends AsyncNotifier<List<Post>> {
     });
   }
 
-  Future<void> createPost(String content) async {
+  Future<void> createPost(String content, {List<String> mediaUrls = const []}) async {
     try {
-      final newPost =
-          await ref.read(feedRepositoryProvider).createPost(content);
+      final newPost = await ref
+          .read(feedRepositoryProvider)
+          .createPost(content, mediaUrls: mediaUrls);
       final current = state.valueOrNull ?? [];
       state = AsyncData([newPost, ...current]);
     } catch (e) {

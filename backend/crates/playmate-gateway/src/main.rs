@@ -24,7 +24,10 @@ use playmate_common::{
     db::{create_pool, run_migrations},
     hub::ConnectionHub,
     state::AppState,
+    StorageService,
 };
+
+mod upload;
 
 // ── 健康检查 ─────────────────────────────────────────────────────────────────
 
@@ -120,11 +123,14 @@ async fn main() -> anyhow::Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("Redis 连接失败: {}", e))?;
 
+    let storage = Arc::new(StorageService::from_config(&config).await);
+
     let state = AppState {
         db,
         redis,
         config: Arc::new(config),
         hub: ConnectionHub::new(),
+        storage,
     };
 
     // ── CORS ──────────────────────────────────────────────────────────────
@@ -142,12 +148,13 @@ async fn main() -> anyhow::Result<()> {
     // ── 路由 ──────────────────────────────────────────────────────────────
     let app = Router::new()
         .route("/health", get(health))
-        .nest("/api/v1/auth",  playmate_user::auth_routes())
-        .nest("/api/v1/users", playmate_user::user_routes())
-        .nest("/api/v1/tags",  playmate_user::tag_routes())
-        .nest("/api/v1/im",    playmate_im::im_routes())
-        .nest("/api/v1/feed",  playmate_feed::feed_routes())
-        .nest("/api/v1/match", playmate_match::match_routes())
+        .nest("/api/v1/auth",   playmate_user::auth_routes())
+        .nest("/api/v1/users",  playmate_user::user_routes())
+        .nest("/api/v1/tags",   playmate_user::tag_routes())
+        .nest("/api/v1/im",     playmate_im::im_routes())
+        .nest("/api/v1/feed",   playmate_feed::feed_routes())
+        .nest("/api/v1/match",  playmate_match::match_routes())
+        .nest("/api/v1/upload", upload::upload_routes())
         .with_state(state)
         .layer(cors)
         .layer(TraceLayer::new_for_http());

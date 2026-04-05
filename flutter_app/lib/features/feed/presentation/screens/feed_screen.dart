@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/services/upload_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../im/data/im_repository.dart';
@@ -34,9 +38,11 @@ class FeedScreen extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => _CreatePostSheet(
-        onPost: (content) async {
+        onPost: (content, mediaUrls) async {
           try {
-            await ref.read(feedProvider.notifier).createPost(content);
+            await ref
+                .read(feedProvider.notifier)
+                .createPost(content, mediaUrls: mediaUrls);
             if (ctx.mounted) Navigator.pop(ctx);
           } catch (e) {
             if (ctx.mounted) {
@@ -369,23 +375,54 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-class _CreatePostSheet extends StatefulWidget {
+class _CreatePostSheet extends ConsumerStatefulWidget {
   const _CreatePostSheet({required this.onPost});
 
-  final Future<void> Function(String content) onPost;
+  final Future<void> Function(String content, List<String> mediaUrls) onPost;
 
   @override
-  State<_CreatePostSheet> createState() => _CreatePostSheetState();
+  ConsumerState<_CreatePostSheet> createState() => _CreatePostSheetState();
 }
 
-class _CreatePostSheetState extends State<_CreatePostSheet> {
+class _CreatePostSheetState extends ConsumerState<_CreatePostSheet> {
   final _controller = TextEditingController();
   bool _isPosting = false;
+  final List<XFile> _pickedImages = [];
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImages() async {
+    final picker = ImagePicker();
+    final results = await picker.pickMultiImage(imageQuality: 80);
+    if (results.isNotEmpty && mounted) {
+      setState(() {
+        final remaining = 9 - _pickedImages.length;
+        _pickedImages.addAll(results.take(remaining));
+      });
+    }
+  }
+
+  Future<void> _submit() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty && _pickedImages.isEmpty) return;
+
+    setState(() => _isPosting = true);
+    try {
+      // 上传图片
+      final uploadService = ref.read(uploadServiceProvider);
+      final mediaUrls = <String>[];
+      for (final xfile in _pickedImages) {
+        final url = await uploadService.uploadPostImage(File(xfile.path));
+        mediaUrls.add(url);
+      }
+      await widget.onPost(text, mediaUrls);
+    } finally {
+      if (mounted) setState(() => _isPosting = false);
+    }
   }
 
   @override
@@ -400,6 +437,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 标题栏
             Row(
               children: [
                 const Text(
@@ -412,18 +450,7 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
                 ),
                 const Spacer(),
                 TextButton.icon(
-                  onPressed: _isPosting
-                      ? null
-                      : () async {
-                          final text = _controller.text.trim();
-                          if (text.isEmpty) return;
-                          setState(() => _isPosting = true);
-                          try {
-                            await widget.onPost(text);
-                          } finally {
-                            if (mounted) setState(() => _isPosting = false);
-                          }
-                        },
+                  onPressed: _isPosting ? null : _submit,
                   icon: _isPosting
                       ? const SizedBox(
                           width: 16,
@@ -436,9 +463,11 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
               ],
             ),
             const SizedBox(height: 12),
+
+            // 文本输入
             TextField(
               controller: _controller,
-              maxLines: 5,
+              maxLines: 4,
               decoration: const InputDecoration(
                 hintText: '分享你的想法...',
                 border: InputBorder.none,
@@ -448,7 +477,74 @@ class _CreatePostSheetState extends State<_CreatePostSheet> {
               ),
               autofocus: true,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+
+            // 已选图片预览
+            if (_pickedImages.isNotEmpty) ...[
+              SizedBox(
+                height: 84,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _pickedImages.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final img = _pickedImages[index];
+                    return Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(
+                            File(img.path),
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          top: 2,
+                          right: 2,
+                          child: GestureDetector(
+                            onTap: () =>
+                                setState(() => _pickedImages.removeAt(index)),
+                            child: Container(
+                              width: 20,
+                              height: 20,
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.close,
+                                  color: Colors.white, size: 12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            // 底部工具栏
+            Row(
+              children: [
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(Icons.image_outlined,
+                      color: AppColors.textSecondary, size: 24),
+                  onPressed: _pickedImages.length < 9 ? _pickImages : null,
+                  tooltip: '添加图片',
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${_pickedImages.length}/9',
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
           ],
         ),
       ),

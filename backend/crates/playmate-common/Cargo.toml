@@ -19,4 +19,6 @@ tracing = { workspace = true }
 validator = { workspace = true }
 async-trait = { workspace = true }
 dashmap = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws-config = { workspace = true }
 envy = "0.4"

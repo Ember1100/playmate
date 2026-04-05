@@ -27,11 +27,25 @@ pub struct AppConfig {
     pub aliyun_sms_sign_name: String,
     #[serde(default)]
     pub aliyun_sms_template_code: String,
+
+    // ── 对象存储（MinIO / OSS）─────────────────────────────────────────────
+    #[serde(default = "default_storage_endpoint")]
+    pub storage_endpoint: String,
+    #[serde(default = "default_storage_endpoint")]
+    pub storage_public_endpoint: String,
+    #[serde(default)]
+    pub storage_access_key: String,
+    #[serde(default)]
+    pub storage_secret_key: String,
+    #[serde(default = "default_storage_region")]
+    pub storage_region: String,
 }
 
 fn default_host() -> String { "0.0.0.0".to_string() }
 fn default_port() -> u16 { 8080 }
 fn default_sms_sign() -> String { "玩伴".to_string() }
+fn default_storage_endpoint() -> String { "http://localhost:9000".to_string() }
+fn default_storage_region() -> String { "us-east-1".to_string() }
 
 impl AppConfig {
     pub fn from_env() -> anyhow::Result<Self> {
