@@ -26,6 +26,7 @@ pub fn user_routes() -> Router<AppState> {
     Router::new()
         .route("/me",            get(profile::get_me).put(profile::update_me))
         .route("/me/tags",       get(tag::get_my_tags).put(tag::set_my_tags))
+        .route("/:id",           get(profile::get_user))
 }
 
 /// 标签路由（公开）

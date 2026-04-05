@@ -3,8 +3,10 @@
 //! # 路由
 //! - GET /api/v1/users/me
 //! - PUT /api/v1/users/me
+//! - GET /api/v1/users/:id
 
-use axum::{extract::State, response::IntoResponse, Json};
+use axum::{extract::{Path, State}, response::IntoResponse, Json};
+use uuid::Uuid;
 use validator::Validate;
 
 use playmate_common::{error::AppError, response::ApiResponse, AppState, CurrentUser};
@@ -17,6 +19,16 @@ pub async fn get_me(
     current_user: CurrentUser,
 ) -> Result<impl IntoResponse, AppError> {
     let user = user_repo::find_by_id(&state.db, current_user.id).await?;
+    Ok(ApiResponse::ok(UserResponse::from(user)))
+}
+
+/// 获取指定用户 Profile（公开信息）
+pub async fn get_user(
+    State(state): State<AppState>,
+    Path(user_id): Path<Uuid>,
+    _current_user: CurrentUser,
+) -> Result<impl IntoResponse, AppError> {
+    let user = user_repo::find_by_id(&state.db, user_id).await?;
     Ok(ApiResponse::ok(UserResponse::from(user)))
 }
 
