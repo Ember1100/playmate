@@ -99,6 +99,10 @@ class ImScreen extends ConsumerWidget {
 
                 return InkWell(
                   onTap: () {
+                    // 乐观清零未读红点
+                    ref
+                        .read(conversationsProvider.notifier)
+                        .clearUnread(conv.id);
                     context.push(
                       '/im/${conv.id}',
                       extra: {
@@ -118,16 +122,21 @@ class ImScreen extends ConsumerWidget {
                         CircleAvatar(
                           radius: 22,
                           backgroundColor: avatarColor,
-                          child: Text(
-                            conv.otherUsername
-                                .substring(0, 1)
-                                .toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          backgroundImage: conv.otherAvatarUrl != null
+                              ? NetworkImage(conv.otherAvatarUrl!)
+                              : null,
+                          child: conv.otherAvatarUrl == null
+                              ? Text(
+                                  conv.otherUsername
+                                      .substring(0, 1)
+                                      .toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                )
+                              : null,
                         ),
                         const SizedBox(width: 12),
                         // Content

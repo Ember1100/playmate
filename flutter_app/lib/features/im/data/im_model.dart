@@ -16,7 +16,7 @@ class Conversation {
         otherAvatarUrl: json['other_avatar_url'] as String?,
         lastMessage: json['last_message'] as String?,
         lastMessageAt: json['last_message_at'] != null
-            ? DateTime.tryParse(json['last_message_at'] as String)
+            ? DateTime.tryParse(json['last_message_at'] as String)?.toLocal()
             : null,
         unreadCount: json['unread_count'] as int? ?? 0,
       );
@@ -49,7 +49,8 @@ class Message {
         type: json['msg_type'] as int? ?? json['type'] as int? ?? 1,
         content: json['content'] as String?,
         mediaUrl: json['media_url'] as String?,
-        createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
+        createdAt: (DateTime.tryParse(json['created_at'] as String? ?? '')
+                    ?.toLocal()) ??
             DateTime.now(),
         isRecalled: json['is_recalled'] as bool? ?? false,
       );

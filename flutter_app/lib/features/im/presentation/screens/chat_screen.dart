@@ -47,28 +47,48 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final wsService = ref.read(wsServiceProvider);
     await wsService.connect(token);
 
+    // 进入会话：乐观清零未读 + 通知服务端更新 last_read_at
+    _markRead();
+
     _wsSub = wsService.messages.listen((data) {
       if (data['type'] == 'new_message') {
         final convId = data['conversation_id'] as String?;
+        final msg = Message(
+          id: data['message_id'] as String? ?? '',
+          conversationId: convId ?? widget.conversationId,
+          senderId: data['sender_id'] as String? ?? '',
+          type: data['msg_type'] as int? ?? 1,
+          content: data['content'] as String?,
+          mediaUrl: data['media_url'] as String?,
+          createdAt: (DateTime.tryParse(
+                      data['created_at'] as String? ?? '')
+                  ?.toLocal()) ??
+              DateTime.now(),
+          isRecalled: false,
+        );
+
         if (convId == widget.conversationId) {
-          final msg = Message(
-            id: data['message_id'] as String? ?? '',
-            conversationId: convId!,
-            senderId: data['sender_id'] as String? ?? '',
-            type: data['msg_type'] as int? ?? 1,
-            content: data['content'] as String?,
-            mediaUrl: data['media_url'] as String?,
-            createdAt: DateTime.tryParse(
-                    data['created_at'] as String? ?? '') ??
-                DateTime.now(),
-            isRecalled: false,
-          );
+          // 当前会话：追加消息并滚到底部
           ref
               .read(chatNotifierProvider(widget.conversationId).notifier)
               .addMessage(msg);
           _scrollToBottom();
+          // 立刻标记已读（自己正在看着）
+          _markRead();
         }
+
+        // 无论哪个会话，都刷新会话列表（更新最新消息预览 + 未读数）
+        ref.read(conversationsProvider.notifier).refresh();
       }
+    });
+  }
+
+  void _markRead() {
+    ref.read(conversationsProvider.notifier).clearUnread(widget.conversationId);
+    ref.read(wsServiceProvider).sendMessage({
+      'type': 'mark_read',
+      'conversation_id': widget.conversationId,
+      'last_read_at': DateTime.now().toUtc().toIso8601String(),
     });
   }
 
@@ -89,6 +109,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _wsSub?.cancel();
     _textController.dispose();
     _scrollController.dispose();
+    // 离开聊天时刷新会话列表，让未读数和最新消息保持准确
+    ref.read(conversationsProvider.notifier).refresh();
     super.dispose();
   }
 

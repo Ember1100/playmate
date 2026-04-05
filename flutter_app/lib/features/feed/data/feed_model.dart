@@ -26,7 +26,8 @@ class Post {
             [],
         likeCount: json['like_count'] as int? ?? 0,
         commentCount: json['comment_count'] as int? ?? 0,
-        createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
+        createdAt: (DateTime.tryParse(json['created_at'] as String? ?? '')
+                    ?.toLocal()) ??
             DateTime.now(),
         isLiked: json['is_liked'] as bool? ?? false,
     );

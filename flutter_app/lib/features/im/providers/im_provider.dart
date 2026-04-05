@@ -15,6 +15,24 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
       () => ref.read(imRepositoryProvider).getConversations(),
     );
   }
+
+  /// 乐观清零某会话的未读数（进入聊天时立即调用）
+  void clearUnread(String conversationId) {
+    state.whenData((list) {
+      state = AsyncData(list.map((c) {
+        if (c.id != conversationId) return c;
+        return Conversation(
+          id: c.id,
+          otherUserId: c.otherUserId,
+          otherUsername: c.otherUsername,
+          otherAvatarUrl: c.otherAvatarUrl,
+          lastMessage: c.lastMessage,
+          lastMessageAt: c.lastMessageAt,
+          unreadCount: 0,
+        );
+      }).toList());
+    });
+  }
 }
 
 final conversationsProvider =
