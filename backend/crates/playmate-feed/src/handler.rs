@@ -35,7 +35,7 @@ pub async fn list_posts(
     let limit = q.limit.clamp(1, 50);
     let offset = (q.page - 1) * limit;
     let total = repository::count_public_posts(&state.db).await?;
-    let posts = repository::list_public_posts(&state.db, limit, offset).await?;
+    let posts = repository::list_public_posts_with_user(&state.db, limit, offset).await?;
     let items: Vec<crate::dto::PostResponse> = posts.into_iter().map(Into::into).collect();
     Ok(ApiResponse::ok(PageResponse {
         has_more: offset + limit < total,

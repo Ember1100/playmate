@@ -8,6 +8,13 @@ use playmate_common::error::{AppError, AppResult};
 
 use crate::model::Post;
 
+/// 帖子 + 用户信息的组合查询结果
+pub struct PostWithUser {
+    pub post: Post,
+    pub username: String,
+    pub avatar_url: Option<String>,
+}
+
 pub async fn create_post(
     pool: &PgPool,
     user_id: Uuid,
@@ -43,9 +50,14 @@ pub async fn find_post_by_id(pool: &PgPool, id: Uuid) -> AppResult<Post> {
     })
 }
 
-/// 公开 Feed（visibility=1），按时间倒序分页
-pub async fn list_public_posts(pool: &PgPool, limit: i64, offset: i64) -> AppResult<Vec<Post>> {
-    sqlx::query_as::<_, Post>(
+/// 公开 Feed（visibility=1），JOIN users 获取用户信息，按时间倒序分页
+pub async fn list_public_posts_with_user(
+    pool: &PgPool,
+    limit: i64,
+    offset: i64,
+) -> AppResult<Vec<PostWithUser>> {
+    // 第一次查询：获取帖子列表
+    let posts = sqlx::query_as::<_, Post>(
         "SELECT id, user_id, content, media_urls, like_count, comment_count, visibility, created_at
          FROM posts WHERE visibility = 1
          ORDER BY created_at DESC
@@ -55,7 +67,43 @@ pub async fn list_public_posts(pool: &PgPool, limit: i64, offset: i64) -> AppRes
     .bind(offset)
     .fetch_all(pool)
     .await
-    .map_err(AppError::Database)
+    .map_err(AppError::Database)?;
+
+    if posts.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // 收集所有不重复的 user_id
+    let user_ids: Vec<Uuid> = posts.iter().map(|p| p.user_id).collect::<std::collections::HashSet<_>>().into_iter().collect();
+
+    // 第二次查询：根据 user_id 列表批量查询用户信息
+    let users = sqlx::query_as::<_, (Uuid, String, Option<String>)>(
+        "SELECT id, username, avatar_url FROM users WHERE id = ANY($1)",
+    )
+    .bind(&user_ids)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    // 组装用户信息映射
+    let user_map: std::collections::HashMap<Uuid, (String, Option<String>)> = users
+        .into_iter()
+        .map(|(id, username, avatar_url)| (id, (username, avatar_url)))
+        .collect();
+
+    // 遍历帖子，填充用户信息
+    let result = posts
+        .into_iter()
+        .map(|post| {
+            let (username, avatar_url) = user_map
+                .get(&post.user_id)
+                .cloned()
+                .unwrap_or_else(|| (post.user_id.to_string()[..8].to_string(), None));
+            PostWithUser { post, username, avatar_url }
+        })
+        .collect();
+
+    Ok(result)
 }
 
 pub async fn count_public_posts(pool: &PgPool) -> AppResult<i64> {
