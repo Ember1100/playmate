@@ -13,6 +13,7 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use sqlx::query_scalar;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -71,7 +72,34 @@ pub async fn create_post(
     )
     .await?;
 
-    Ok((StatusCode::CREATED, ApiResponse::ok(crate::dto::PostResponse::from(post))))
+    // 查询头像（JWT Claims 中没有 avatar_url，需单独取）
+    let avatar_url: Option<String> = query_scalar(
+        "SELECT avatar_url FROM users WHERE id = $1",
+    )
+    .bind(current_user.id)
+    .fetch_optional(&state.db)
+    .await
+    .ok()
+    .flatten()
+    .flatten();
+
+    let media_urls_vec: Vec<String> =
+        serde_json::from_value(post.media_urls.clone()).unwrap_or_default();
+
+    let response = crate::dto::PostResponse {
+        id: post.id,
+        user_id: post.user_id,
+        username: current_user.username.clone(),
+        avatar_url,
+        content: post.content,
+        media_urls: media_urls_vec,
+        like_count: post.like_count,
+        comment_count: post.comment_count,
+        visibility: post.visibility,
+        created_at: post.created_at,
+    };
+
+    Ok((StatusCode::CREATED, ApiResponse::ok(response)))
 }
 
 /// 帖子详情

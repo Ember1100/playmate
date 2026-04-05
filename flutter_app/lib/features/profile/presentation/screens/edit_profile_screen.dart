@@ -10,6 +10,7 @@ import '../../../../core/services/upload_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/data/auth_model.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../feed/providers/feed_provider.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -77,6 +78,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       );
       final user = UserModel.fromJson(resp['data'] as Map<String, dynamic>);
       ref.read(currentUserProvider.notifier).state = user;
+      ref.invalidate(feedProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('保存成功')),
