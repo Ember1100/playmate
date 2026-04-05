@@ -1,52 +1,23 @@
 //! 认证 HTTP Handler
 //!
 //! # 路由
-//! - POST /api/v1/auth/register
-//! - POST /api/v1/auth/login
-//! - POST /api/v1/auth/sms/send
-//! - POST /api/v1/auth/sms/verify
-//! - POST /api/v1/auth/wechat/login
-//! - POST /api/v1/auth/refresh
-//! - POST /api/v1/auth/logout
+//! - POST   /api/v1/auth/sms/send
+//! - POST   /api/v1/auth/sms/verify
+//! - POST   /api/v1/auth/wechat/login
+//! - POST   /api/v1/auth/refresh
+//! - POST   /api/v1/auth/logout
+//! - DELETE /api/v1/auth/account
 
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use axum::{extract::State, response::IntoResponse, Json};
 use validator::Validate;
 
 use playmate_common::{error::AppError, response::ApiResponse, AppState, CurrentUser};
 
 use crate::{
-    model::auth::{
-        LoginRequest, RefreshRequest, RegisterRequest, SmsCodeRequest, SmsVerifyRequest,
-        WechatLoginRequest,
-    },
+    model::auth::{RefreshRequest, SmsCodeRequest, SmsVerifyRequest, WechatLoginRequest},
+    repo::user_repo,
     service::{auth_service, sms_service},
 };
-
-/// 邮箱注册
-pub async fn register(
-    State(state): State<AppState>,
-    Json(payload): Json<RegisterRequest>,
-) -> Result<impl IntoResponse, AppError> {
-    payload.validate().map_err(|e| AppError::BadRequest(e.to_string()))?;
-    let resp = auth_service::register_with_email(
-        &state,
-        &payload.username,
-        &payload.email,
-        &payload.password,
-    )
-    .await?;
-    Ok((StatusCode::CREATED, ApiResponse::ok(resp)))
-}
-
-/// 邮箱密码登录
-pub async fn login(
-    State(state): State<AppState>,
-    Json(payload): Json<LoginRequest>,
-) -> Result<impl IntoResponse, AppError> {
-    payload.validate().map_err(|e| AppError::BadRequest(e.to_string()))?;
-    let resp = auth_service::login_with_email(&state, &payload.email, &payload.password).await?;
-    Ok(ApiResponse::ok(resp))
-}
 
 /// 发送短信验证码
 pub async fn send_sms(
@@ -59,6 +30,9 @@ pub async fn send_sms(
 }
 
 /// 短信验证码登录（首次自动注册）
+///
+/// # 响应
+/// 返回 `is_new_user: true` 时，Flutter 跳转新人问卷页
 pub async fn verify_sms(
     State(state): State<AppState>,
     Json(payload): Json<SmsVerifyRequest>,
@@ -86,7 +60,16 @@ pub async fn refresh(
     Ok(ApiResponse::ok(resp))
 }
 
-/// 登出（无状态，客户端丢弃 Token 即可）
+/// 登出（JWT 无状态，客户端丢弃 Token 即可）
 pub async fn logout(_current_user: CurrentUser) -> Result<impl IntoResponse, AppError> {
+    Ok(ApiResponse::ok_empty())
+}
+
+/// 账号注销（软删除，清除手机号）
+pub async fn delete_account(
+    State(state): State<AppState>,
+    current_user: CurrentUser,
+) -> Result<impl IntoResponse, AppError> {
+    user_repo::deactivate_user(&state.db, current_user.id).await?;
     Ok(ApiResponse::ok_empty())
 }

@@ -1,0 +1,41 @@
+//! 搭子模块数据模型
+
+use chrono::{DateTime, Utc};
+use sqlx::FromRow;
+use uuid::Uuid;
+
+#[derive(Debug, FromRow)]
+pub struct BuddyRequest {
+    pub id:           Uuid,
+    pub from_user_id: Uuid,
+    pub to_user_id:   Uuid,
+    #[sqlx(rename = "type")]
+    pub req_type:     i16, // 1=线上 2=线下 3=职业
+    pub message:      Option<String>,
+    pub status:       i16, // 0=待响应 1=接受 2=拒绝
+    pub created_at:   DateTime<Utc>,
+}
+
+#[derive(Debug, FromRow)]
+pub struct BuddyInvitation {
+    pub id:            Uuid,
+    pub from_user_id:  Uuid,
+    pub to_user_id:    Uuid,
+    pub title:         String,
+    pub content:       Option<String>,
+    pub activity_type: Option<String>,
+    pub scheduled_at:  Option<DateTime<Utc>>,
+    pub location:      Option<String>,
+    pub status:        i16, // 0=待响应 1=接受 2=拒绝
+    pub created_at:    DateTime<Utc>,
+}
+
+/// 搭子候选人（简要用户信息）
+#[derive(Debug, FromRow)]
+pub struct BuddyCandidate {
+    pub id:         Uuid,
+    pub username:   String,
+    pub avatar_url: Option<String>,
+    pub bio:        Option<String>,
+    pub gender:     i16,
+}

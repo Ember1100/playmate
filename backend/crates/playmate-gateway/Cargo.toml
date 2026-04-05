@@ -8,11 +8,12 @@ name = "playmate-gateway"
 path = "src/main.rs"
 
 [dependencies]
-playmate-common = { path = "../playmate-common" }
-playmate-user   = { path = "../playmate-user" }
-playmate-im     = { path = "../playmate-im" }
-playmate-feed   = { path = "../playmate-feed" }
-playmate-match  = { path = "../playmate-match" }
+playmate-common  = { path = "../playmate-common" }
+playmate-user    = { path = "../playmate-user" }
+playmate-im      = { path = "../playmate-im" }
+playmate-circle  = { path = "../playmate-circle" }
+playmate-market  = { path = "../playmate-market" }
+playmate-buddy   = { path = "../playmate-buddy" }
 axum = { workspace = true }
 tokio = { workspace = true }
 tower-http = { workspace = true }

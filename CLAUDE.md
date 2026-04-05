@@ -4,26 +4,59 @@
 
 | 日期 | 章节 | 变更内容 |
 |------|------|---------|
-| 2026-04-05 | 对象存储规范 | 新增MinIO开发/OSS生产策略、S3接入代码、docker-compose配置 |
-| 2026-04-04 | 认证方式规范 | 新增短信验证码/微信登录/user_oauth表/新增环境变量 |
-| 2026-04-04 | Flutter 客户端规范 | 新增项目结构/状态管理/路由/设计规范/页面UI描述 |
-| 2026-04-04 | 初始版本 | 后端架构/数据库表/WebSocket/JWT/Redis规范 |
+| 2026-04-05 | 设计规范PPT | 补充Tab顺序/主色#FF7A00/年龄限制35岁/信用分/问卷字段/学习笔记 |
+| 2026-04-05 | 全面重写v2 | 根据功能架构全览图补全所有模块，明确MVP边界 |
 
 > 本文件是 Claude Code 的核心上下文。每次开始新任务前必须完整阅读。
 > 所有代码生成、架构决策、命名约定均以此文件为准。
+> 遇到冲突以本文件为准，忽略历史对话中的旧方案。
 
 ---
 
-## 项目概览
+## MVP 功能边界（开发前必读）
 
-**玩伴（Playmate）** — 一款类 Soul 的兴趣社交 App，核心差异化是**兴趣标签匹配 + 即时通讯 + 动态广场**。
+### 做 ✅
+- 登录：手机号验证 + 短信验证码 + 微信登录 + 新人问卷 + 账号找回/注销
+- 圈子：话题/投票/评论/社群聊天
+- 集市：失物招领/二手闲置/兼职啦/以物换物（纯信息发布，无支付）
+- 搭子：搭子推荐/邀约发送/邀约管理/职业搭子阵地
+- 趣玩：静态展示（无报名/拼团后端接口）
+- 我的：个人主页/成长值积分展示/收藏/消息通知/会员中心/成长报告/需求反馈
+
+### 不做 ❌（后期迭代）
+- 支付/交易担保/拼团订单
+- 技能卡牌、元宇宙社交、数字藏品
+- 未成年人模式
+- 兼职评价、交易纠纷处理
+- 活动报名（趣玩模块后端接口）
+
+---
+
+## 产品定位
+
+**玩伴（Playmate）** — 兴趣社交 + 本地生活服务 App
+
+底部 5 个 Tab：
+
+| Tab | 名称 | MVP 核心功能 |
+|-----|------|-------------|
+| Tab1 | 圈子 | 话题/投票/评论/社群聊天 |
+| Tab2 | 集市 | 失物招领/二手闲置/兼职啦/以物换物 |
+| Tab3 | 搭子 | 搭子推荐/邀约/职业搭子阵地 |
+| Tab4 | 趣玩 | 静态展示活动内容 |
+| Tab5 | 我的 | 个人主页/成长值/收藏/消息/会员 |
+
+---
+
+## 技术栈
 
 - 客户端：Flutter（iOS / Android）
 - 后端：Rust + Axum，Workspace monorepo
-- 数据库：PostgreSQL（主存储）+ Redis（缓存/在线状态）
+- 数据库：PostgreSQL + Redis
 - 消息队列：Redis Streams（MVP），后期迁移 Kafka
 - 实时通信：WebSocket（Axum 原生）
-- 媒体服务：LiveKit（语音/视频，后期引入）
+- 对象存储：MinIO（开发）→ 阿里云 OSS（生产）
+- 部署：GitHub Actions → 阿里云服务器 systemd
 
 ---
 
@@ -31,21 +64,22 @@
 
 ```
 playmate/
-├── CLAUDE.md                      ← 本文件
-├── Cargo.toml                     ← workspace 根
+├── CLAUDE.md
+├── Cargo.toml
 ├── backend/
 │   └── crates/
-│       ├── playmate-common/       ← 共享：错误类型、DB pool、JWT、中间件
-│       ├── playmate-gateway/      ← Axum 主进程，路由聚合，WebSocket 升级
-│       ├── playmate-user/         ← 用户注册/登录/Profile/标签
-│       ├── playmate-im/           ← 即时通讯，消息存储，会话管理
-│       ├── playmate-match/        ← 兴趣匹配，推荐算法
-│       └── playmate-feed/         ← 动态广场，Feed 流
+│       ├── playmate-common/    ← 错误/响应/JWT/缓存/存储/中间件
+│       ├── playmate-gateway/   ← Axum 主进程，路由聚合
+│       ├── playmate-user/      ← 用户/认证/问卷/账号管理
+│       ├── playmate-circle/    ← 圈子：话题/投票/评论/社群
+│       ├── playmate-market/    ← 集市：失物/闲置/兼职/换物
+│       ├── playmate-buddy/     ← 搭子：推荐/邀约/职业阵地
+│       └── playmate-im/        ← 私信/群聊/WebSocket
 ├── flutter_app/
-│   └── ...
 └── infra/
-    ├── docker-compose.yml         ← 本地开发环境（PG + Redis）
-    └── migrations/                ← SQLx 数据库迁移文件
+    ├── docker-compose.prod.yml
+    ├── .env.prod
+    └── migrations/
 ```
 
 ### Workspace Cargo.toml
@@ -56,9 +90,10 @@ members = [
     "backend/crates/playmate-common",
     "backend/crates/playmate-gateway",
     "backend/crates/playmate-user",
+    "backend/crates/playmate-circle",
+    "backend/crates/playmate-market",
+    "backend/crates/playmate-buddy",
     "backend/crates/playmate-im",
-    "backend/crates/playmate-match",
-    "backend/crates/playmate-feed",
 ]
 resolver = "2"
 
@@ -81,482 +116,589 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 validator = { version = "0.18", features = ["derive"] }
 argon2 = "0.5"
 rand = "0.8"
+aws-sdk-s3 = "1"
+aws-config = { version = "1", default-features = false, features = ["behavior-version-latest"] }
+reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+dashmap = "5"
 ```
 
 ---
 
-## 错误处理规范（严格遵守）
-
-### 统一错误类型定义在 `common` crate
+## 错误处理规范
 
 ```rust
 // playmate-common/src/error.rs
-use axum::{http::StatusCode, response::{IntoResponse, Response}, Json};
-use serde_json::json;
-use thiserror::Error;
-
 #[derive(Error, Debug)]
 pub enum AppError {
-    #[error("未授权: {0}")]
-    Unauthorized(String),
-
-    #[error("禁止访问: {0}")]
-    Forbidden(String),
-
-    #[error("资源未找到: {0}")]
-    NotFound(String),
-
-    #[error("请求参数错误: {0}")]
-    BadRequest(String),
-
-    #[error("业务错误: {0}")]
-    Business(String),
-
-    #[error("数据库错误: {0}")]
-    Database(#[from] sqlx::Error),
-
-    #[error("Redis错误: {0}")]
-    Redis(#[from] redis::RedisError),
-
-    #[error("内部服务器错误")]
-    Internal(#[from] anyhow::Error),
+    #[error("未授权: {0}")]       Unauthorized(String),
+    #[error("禁止访问: {0}")]     Forbidden(String),
+    #[error("资源未找到: {0}")]   NotFound(String),
+    #[error("请求参数错误: {0}")] BadRequest(String),
+    #[error("业务错误: {0}")]     Business(String),
+    #[error("数据库错误: {0}")]   Database(#[from] sqlx::Error),
+    #[error("Redis错误: {0}")]    Redis(#[from] redis::RedisError),
+    #[error("内部服务器错误")]    Internal(#[from] anyhow::Error),
 }
-
-impl IntoResponse for AppError {
-    fn into_response(self) -> Response {
-        let (status, code, message) = match &self {
-            AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED", msg.clone()),
-            AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, "FORBIDDEN", msg.clone()),
-            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, "NOT_FOUND", msg.clone()),
-            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, "BAD_REQUEST", msg.clone()),
-            AppError::Business(msg) => (StatusCode::UNPROCESSABLE_ENTITY, "BUSINESS_ERROR", msg.clone()),
-            AppError::Database(e) => {
-                tracing::error!("数据库错误: {:?}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "DB_ERROR", "数据库错误".to_string())
-            }
-            AppError::Redis(e) => {
-                tracing::error!("Redis错误: {:?}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "CACHE_ERROR", "缓存错误".to_string())
-            }
-            AppError::Internal(e) => {
-                tracing::error!("内部错误: {:?}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "服务器内部错误".to_string())
-            }
-        };
-
-        let body = Json(json!({
-            "success": false,
-            "code": code,
-            "message": message,
-            "data": null
-        }));
-
-        (status, body).into_response()
-    }
-}
-
 pub type AppResult<T> = Result<T, AppError>;
 ```
 
-### 规则
-
-- **所有 handler 函数**返回类型必须是 `Result<impl IntoResponse, AppError>`
-- **禁止** 在 handler 层使用 `unwrap()` 或 `expect()`，只允许在测试和 main 初始化中使用
-- 跨 crate 调用用 `anyhow::Context` 添加上下文：`.context("查询用户失败")?`
-- 数据库 not found 统一转换：`sqlx::Error::RowNotFound` → `AppError::NotFound`
+规则：
+- 所有 handler 返回 `Result<impl IntoResponse, AppError>`
+- 禁止在 handler 层 `unwrap()` / `expect()`
+- `sqlx::Error::RowNotFound` → `AppError::NotFound`
 
 ---
 
-## API 响应格式（所有接口必须遵守）
+## API 响应格式
+
+```json
+{ "success": true,  "code": "SUCCESS",     "message": "成功",     "data": {...} }
+{ "success": false, "code": "BAD_REQUEST", "message": "参数错误", "data": null  }
+```
 
 ```rust
-// playmate-common/src/response.rs
-use serde::Serialize;
-use axum::{response::{IntoResponse, Response}, Json, http::StatusCode};
-
-#[derive(Serialize)]
-pub struct ApiResponse<T: Serialize> {
-    pub success: bool,
-    pub code: String,
-    pub message: String,
-    pub data: Option<T>,
-}
-
-impl<T: Serialize> ApiResponse<T> {
-    pub fn ok(data: T) -> Json<Self> {
-        Json(Self {
-            success: true,
-            code: "SUCCESS".to_string(),
-            message: "成功".to_string(),
-            data: Some(data),
-        })
-    }
-
-    pub fn ok_empty() -> Json<ApiResponse<()>> {
-        Json(ApiResponse {
-            success: true,
-            code: "SUCCESS".to_string(),
-            message: "成功".to_string(),
-            data: None,
-        })
-    }
-}
-```
-
-所有成功响应示例：
-```json
-{ "success": true, "code": "SUCCESS", "message": "成功", "data": { ... } }
-```
-
-所有失败响应示例：
-```json
-{ "success": false, "code": "NOT_FOUND", "message": "用户不存在", "data": null }
+pub struct ApiResponse<T: Serialize>  { success: bool, code: String, message: String, data: Option<T> }
+pub struct PageResponse<T: Serialize> { items: Vec<T>, total: i64, page: i64, limit: i64, has_more: bool }
 ```
 
 ---
 
 ## 数据库规范
 
-### 驱动
+- 驱动：**SQLx 原始 SQL**，禁止 ORM
+- 迁移：只写 UP，格式 `{timestamp}_{描述}.sql`
+- RowNotFound 统一转 `AppError::NotFound`
 
-使用 **SQLx**（原始 SQL + 编译期检查），**不使用** Diesel、SeaORM 等 ORM。
-
-### 连接池初始化
-
-```rust
-// playmate-common/src/db.rs
-use sqlx::PgPool;
-
-pub async fn create_pool(database_url: &str) -> PgPool {
-    sqlx::PgPool::connect(database_url)
-        .await
-        .expect("无法连接数据库")
-}
-```
-
-### 查询模式
-
-```rust
-// 单条查询
-let user = sqlx::query_as!(
-    User,
-    "SELECT id, username, email, created_at FROM users WHERE id = $1",
-    user_id
-)
-.fetch_one(&pool)
-.await
-.map_err(|e| match e {
-    sqlx::Error::RowNotFound => AppError::NotFound(format!("用户 {} 不存在", user_id)),
-    _ => AppError::Database(e),
-})?;
-
-// 分页查询（统一格式）
-let users = sqlx::query_as!(
-    User,
-    "SELECT * FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2",
-    limit as i64,
-    ((page - 1) * limit) as i64
-)
-.fetch_all(&pool)
-.await?;
-```
-
-### 迁移文件命名规范
+### 迁移文件顺序
 
 ```
-infra/migrations/
-├── 20240101000000_create_users.sql
-├── 20240101000001_create_messages.sql
-├── 20240101000002_create_posts.sql
-└── 20240101000003_create_matches.sql
+20260405000000_create_users.sql
+20260405000001_create_tags.sql
+20260405000002_create_user_oauth.sql
+20260405000003_create_user_stats.sql
+20260405000004_create_user_questionnaire.sql
+20260405000005_create_topics.sql
+20260405000006_create_topic_comments.sql
+20260405000007_create_topic_likes.sql
+20260405000008_create_polls.sql
+20260405000009_create_poll_votes.sql
+20260405000010_create_social_groups.sql
+20260405000011_create_lost_found.sql
+20260405000012_create_second_hand.sql
+20260405000013_create_part_time.sql
+20260405000014_create_barter.sql
+20260405000015_create_market_collects.sql
+20260405000016_create_buddy_requests.sql
+20260405000017_create_buddy_invitations.sql
+20260405000018_create_career_profiles.sql
+20260405000019_create_conversations.sql
+20260405405020_create_messages.sql
+20260405000021_create_notifications.sql
+20260405000022_create_feedback.sql
 ```
 
-格式：`{timestamp}_{描述}.sql`，只有 UP migration，不写 DOWN。
+### 完整表结构 SQL
 
-### 核心表结构
-
-#### users（用户表）
 ```sql
+-- ════════════════════════════════
+-- 用户体系
+-- ════════════════════════════════
+
 CREATE TABLE users (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    username    VARCHAR(32) NOT NULL UNIQUE,
-    email       VARCHAR(255) NOT NULL UNIQUE,
-    phone       VARCHAR(20),
-    password_hash VARCHAR(255) NOT NULL,
-    avatar_url  TEXT,
-    bio         TEXT,
-    gender      SMALLINT DEFAULT 0,        -- 0未知 1男 2女 3其他
-    birthday    DATE,
-    is_active   BOOLEAN NOT NULL DEFAULT true,
-    last_seen_at TIMESTAMPTZ,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username      VARCHAR(32) NOT NULL UNIQUE,
+    phone         VARCHAR(20) UNIQUE,
+    password_hash VARCHAR(255),
+    avatar_url    TEXT,
+    bio           TEXT,
+    gender        SMALLINT DEFAULT 0,      -- 0未知 1男 2女 3其他
+    birthday      DATE,
+    is_verified   BOOLEAN NOT NULL DEFAULT false,  -- 手机号验证完成
+    is_new_user   BOOLEAN NOT NULL DEFAULT true,   -- 是否完成新人问卷
+    is_active     BOOLEAN NOT NULL DEFAULT true,
+    last_seen_at  TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_phone ON users(phone);
-```
 
-#### user_tags（用户兴趣标签）
-```sql
+-- 兴趣标签
 CREATE TABLE tags (
-    id      SERIAL PRIMARY KEY,
-    name    VARCHAR(32) NOT NULL UNIQUE,
-    category VARCHAR(32) NOT NULL   -- music/movie/sport/game/food 等
+    id         SERIAL PRIMARY KEY,
+    name       VARCHAR(32) NOT NULL UNIQUE,
+    category   VARCHAR(32) NOT NULL,
+    sort_order INTEGER DEFAULT 0
 );
-
 CREATE TABLE user_tags (
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     tag_id  INTEGER REFERENCES tags(id),
     PRIMARY KEY (user_id, tag_id)
 );
-```
 
-#### conversations + messages（IM 核心）
-```sql
-CREATE TABLE conversations (
+-- 第三方登录
+CREATE TABLE user_oauth (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    type        SMALLINT NOT NULL DEFAULT 1,   -- 1私聊 2群聊
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider    VARCHAR(20) NOT NULL,    -- 'wechat' | 'apple'
+    provider_id VARCHAR(128) NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (provider, provider_id)
+);
+
+-- 用户统计（成长值/积分/收藏，MVP展示）
+CREATE TABLE user_stats (
+    user_id       UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    growth_value  INTEGER NOT NULL DEFAULT 0,
+    points        INTEGER NOT NULL DEFAULT 0,
+    collect_count INTEGER NOT NULL DEFAULT 0,
+    level         SMALLINT NOT NULL DEFAULT 1,  -- 会员等级 Lv.1~10
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 新人问卷（登录后引导填写）
+CREATE TABLE user_questionnaire (
+    user_id      UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    interests    JSONB DEFAULT '[]',   -- 选择的兴趣标签ID数组
+    purposes     JSONB DEFAULT '[]',   -- 使用目的：找搭子/逛集市/看圈子等
+    age_range    VARCHAR(10),          -- '18-22'/'23-28'/'29-35'/'35+'
+    city         VARCHAR(50),
+    completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ════════════════════════════════
+-- 圈子（Tab1）
+-- ════════════════════════════════
+
+-- 话题
+CREATE TABLE topics (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id    UUID NOT NULL REFERENCES users(id),
+    title         VARCHAR(200) NOT NULL,
+    content       TEXT,
+    cover_url     TEXT,
+    category      VARCHAR(32),  -- hot/follow/growth/career
+    like_count    INTEGER NOT NULL DEFAULT 0,
+    comment_count INTEGER NOT NULL DEFAULT 0,
+    view_count    INTEGER NOT NULL DEFAULT 0,
+    is_hot        BOOLEAN NOT NULL DEFAULT false,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_topics_category ON topics(category, created_at DESC);
+CREATE INDEX idx_topics_hot      ON topics(is_hot, like_count DESC);
+
+-- 话题评论（支持二级回复）
+CREATE TABLE topic_comments (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    topic_id   UUID NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    user_id    UUID NOT NULL REFERENCES users(id),
+    parent_id  UUID REFERENCES topic_comments(id),
+    content    TEXT NOT NULL,
+    like_count INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_topic_comments ON topic_comments(topic_id, created_at);
+
+CREATE TABLE topic_likes (
+    topic_id   UUID REFERENCES topics(id) ON DELETE CASCADE,
+    user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (topic_id, user_id)
+);
+
+-- 观点投票
+CREATE TABLE polls (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id   UUID NOT NULL REFERENCES users(id),
+    title        VARCHAR(200) NOT NULL,
+    pro_argument TEXT NOT NULL,
+    con_argument TEXT NOT NULL,
+    pro_count    INTEGER NOT NULL DEFAULT 0,
+    con_count    INTEGER NOT NULL DEFAULT 0,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE poll_votes (
+    poll_id    UUID NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    side       SMALLINT NOT NULL,  -- 1=正方 2=反方
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (poll_id, user_id)
+);
+
+-- 社群（圈子内的群聊，独立于私信群聊）
+CREATE TABLE social_groups (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id   UUID NOT NULL REFERENCES users(id),
+    name         VARCHAR(50) NOT NULL,
+    description  TEXT,
+    avatar_url   TEXT,
+    category     VARCHAR(32),           -- 对应圈子分类
+    member_count INTEGER NOT NULL DEFAULT 1,
+    is_public    BOOLEAN NOT NULL DEFAULT true,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE social_group_members (
+    group_id  UUID REFERENCES social_groups(id) ON DELETE CASCADE,
+    user_id   UUID REFERENCES users(id) ON DELETE CASCADE,
+    role      SMALLINT NOT NULL DEFAULT 1,  -- 1成员 2管理员 3群主
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (group_id, user_id)
+);
+CREATE TABLE social_group_messages (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id    UUID NOT NULL REFERENCES social_groups(id),
+    sender_id   UUID NOT NULL REFERENCES users(id),
+    type        SMALLINT NOT NULL DEFAULT 1,
+    content     TEXT,
+    media_url   TEXT,
+    is_recalled BOOLEAN NOT NULL DEFAULT false,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_social_group_messages ON social_group_messages(group_id, created_at DESC);
 
-CREATE TABLE conversation_members (
-    conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
-    user_id         UUID REFERENCES users(id) ON DELETE CASCADE,
-    joined_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_read_at    TIMESTAMPTZ,
-    PRIMARY KEY (conversation_id, user_id)
+-- ════════════════════════════════
+-- 集市（Tab2）— 4个子功能
+-- ════════════════════════════════
+
+-- 失物招领
+CREATE TABLE lost_found (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id),
+    type        SMALLINT NOT NULL,       -- 1=失物 2=招领
+    title       VARCHAR(100) NOT NULL,
+    description TEXT,
+    images      JSONB DEFAULT '[]',
+    category    VARCHAR(32),             -- 证件/电子/衣物/其他
+    location    VARCHAR(200),
+    contact     VARCHAR(100),
+    status      SMALLINT NOT NULL DEFAULT 1,  -- 1发布中 2已解决
+    serial_no   VARCHAR(30) NOT NULL,    -- 编号，如 05-058-26-32
+    view_count  INTEGER NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_lost_found_type     ON lost_found(type, status, created_at DESC);
+CREATE INDEX idx_lost_found_category ON lost_found(category);
+CREATE UNIQUE INDEX idx_lost_found_serial ON lost_found(serial_no);
+
+-- 二手闲置
+CREATE TABLE second_hand (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id),
+    title       VARCHAR(100) NOT NULL,
+    description TEXT,
+    images      JSONB DEFAULT '[]',
+    price       DECIMAL(10,2) NOT NULL DEFAULT 0,
+    category    VARCHAR(32),             -- 数码/服装/书籍/家具/其他
+    condition   SMALLINT NOT NULL DEFAULT 1,  -- 1全新 2九成新 3八成新 4其他
+    location    VARCHAR(100),
+    contact     VARCHAR(100),
+    status      SMALLINT NOT NULL DEFAULT 1,  -- 1在售 2已售
+    view_count  INTEGER NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_second_hand_category ON second_hand(category, status, created_at DESC);
+
+-- 兼职啦
+CREATE TABLE part_time (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id),
+    title       VARCHAR(100) NOT NULL,
+    description TEXT,
+    images      JSONB DEFAULT '[]',
+    salary      VARCHAR(50),             -- "150元/天"
+    salary_type SMALLINT DEFAULT 1,      -- 1按天 2按小时 3按次 4面议
+    category    VARCHAR(32),             -- 促销/家教/配送/文职/其他
+    location    VARCHAR(100),
+    contact     VARCHAR(100),
+    status      SMALLINT NOT NULL DEFAULT 1,  -- 1招募中 2已结束
+    view_count  INTEGER NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_part_time_category ON part_time(category, status, created_at DESC);
+
+-- 以物换物
+CREATE TABLE barter (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id),
+    title       VARCHAR(100) NOT NULL,
+    description TEXT,
+    images      JSONB DEFAULT '[]',
+    offer_item  VARCHAR(100) NOT NULL,   -- 我有
+    want_item   VARCHAR(100) NOT NULL,   -- 我想要
+    category    VARCHAR(32),
+    location    VARCHAR(100),
+    contact     VARCHAR(100),
+    status      SMALLINT NOT NULL DEFAULT 1,  -- 1换物中 2已完成
+    view_count  INTEGER NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_barter_category ON barter(category, status, created_at DESC);
+
+-- 集市收藏（统一收藏4种内容）
+CREATE TABLE market_collects (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    target_type VARCHAR(20) NOT NULL,   -- 'lost_found'|'second_hand'|'part_time'|'barter'
+    target_id   UUID NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, target_type, target_id)
 );
 
+-- ════════════════════════════════
+-- 搭子（Tab3）
+-- ════════════════════════════════
+
+-- 搭子匹配请求
+CREATE TABLE buddy_requests (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    from_user_id UUID NOT NULL REFERENCES users(id),
+    to_user_id   UUID NOT NULL REFERENCES users(id),
+    type         SMALLINT NOT NULL DEFAULT 1,  -- 1线上 2线下 3职业
+    message      TEXT,
+    status       SMALLINT NOT NULL DEFAULT 0,  -- 0待响应 1已接受 2已拒绝
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT no_self_buddy CHECK (from_user_id != to_user_id)
+);
+CREATE INDEX idx_buddy_requests_to ON buddy_requests(to_user_id, status);
+
+-- 邀约（发送/管理页）
+CREATE TABLE buddy_invitations (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    from_user_id UUID NOT NULL REFERENCES users(id),
+    to_user_id   UUID NOT NULL REFERENCES users(id),
+    title        VARCHAR(100) NOT NULL,   -- 邀约主题
+    content      TEXT,                    -- 邀约描述
+    activity_type VARCHAR(32),            -- 活动类型：爬山/看电影/打球等
+    scheduled_at TIMESTAMPTZ,             -- 约定时间
+    location     VARCHAR(200),
+    status       SMALLINT NOT NULL DEFAULT 0,  -- 0待响应 1已接受 2已拒绝 3已过期
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT no_self_invite CHECK (from_user_id != to_user_id)
+);
+CREATE INDEX idx_invitations_to   ON buddy_invitations(to_user_id, status);
+CREATE INDEX idx_invitations_from ON buddy_invitations(from_user_id, status);
+
+-- 职业搭子阵地（职业名片/展示）
+CREATE TABLE career_profiles (
+    user_id      UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    job_title    VARCHAR(100),            -- 职位
+    company      VARCHAR(100),            -- 公司/行业
+    skills       JSONB DEFAULT '[]',      -- 技能标签
+    experience   TEXT,                    -- 经验描述
+    looking_for  TEXT,                    -- 寻找方向
+    is_public    BOOLEAN NOT NULL DEFAULT true,
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ════════════════════════════════
+-- IM：私信
+-- ════════════════════════════════
+
+CREATE TABLE conversations (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_a_id  UUID NOT NULL REFERENCES users(id),
+    user_b_id  UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_a_id, user_b_id)
+);
 CREATE TABLE messages (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_id UUID NOT NULL REFERENCES conversations(id),
     sender_id       UUID NOT NULL REFERENCES users(id),
-    type            SMALLINT NOT NULL DEFAULT 1,  -- 1文字 2图片 3语音 4视频
+    type            SMALLINT NOT NULL DEFAULT 1,  -- 1文字 2图片 3语音
     content         TEXT,
     media_url       TEXT,
     is_recalled     BOOLEAN NOT NULL DEFAULT false,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_messages_conv ON messages(conversation_id, created_at DESC);
 
-CREATE INDEX idx_messages_conversation ON messages(conversation_id, created_at DESC);
-```
+-- ════════════════════════════════
+-- 通知 & 反馈
+-- ════════════════════════════════
 
-#### posts（动态广场）
-```sql
-CREATE TABLE posts (
+-- 消息通知（消息中心页）
+CREATE TABLE notifications (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    content     TEXT NOT NULL,
-    media_urls  JSONB DEFAULT '[]',
-    like_count  INTEGER NOT NULL DEFAULT 0,
-    comment_count INTEGER NOT NULL DEFAULT 0,
-    visibility  SMALLINT NOT NULL DEFAULT 1,  -- 1公开 2仅关注 3私密
+    type        VARCHAR(30) NOT NULL,     -- 'buddy_request'|'invitation'|'topic_comment'|'system'
+    title       VARCHAR(100) NOT NULL,
+    content     TEXT,
+    target_type VARCHAR(30),              -- 关联对象类型
+    target_id   UUID,                     -- 关联对象ID
+    is_read     BOOLEAN NOT NULL DEFAULT false,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
 
-CREATE INDEX idx_posts_user ON posts(user_id, created_at DESC);
-CREATE INDEX idx_posts_feed ON posts(created_at DESC) WHERE visibility = 1;
-```
-
-#### match_records（匹配记录）
-```sql
-CREATE TABLE match_records (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_a_id   UUID NOT NULL REFERENCES users(id),
-    user_b_id   UUID NOT NULL REFERENCES users(id),
-    score       SMALLINT NOT NULL,             -- 匹配分 0-100
-    status      SMALLINT NOT NULL DEFAULT 0,   -- 0待响应 1双方接受 2已拒绝
-    matched_at  TIMESTAMPTZ,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT no_self_match CHECK (user_a_id != user_b_id)
+-- 需求反馈（我的模块）
+CREATE TABLE feedback (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID REFERENCES users(id) ON DELETE SET NULL,
+    type       VARCHAR(20) NOT NULL DEFAULT 'suggestion',  -- suggestion/bug/other
+    content    TEXT NOT NULL,
+    images     JSONB DEFAULT '[]',
+    contact    VARCHAR(100),
+    status     SMALLINT NOT NULL DEFAULT 0,  -- 0待处理 1已处理
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 
 ---
 
-## 应用状态与依赖注入
+## API 路由规范
 
-```rust
-// playmate-common/src/state.rs
-use sqlx::PgPool;
-use redis::aio::ConnectionManager;
+```
+# ── 认证（playmate-user）─────────────────────────────────
+POST   /api/v1/auth/sms/send
+POST   /api/v1/auth/sms/verify             ← 验证成功返回 JWT + is_new_user
+POST   /api/v1/auth/wechat/login
+POST   /api/v1/auth/refresh
+POST   /api/v1/auth/logout
+DELETE /api/v1/auth/account                ← 账号注销
 
-#[derive(Clone)]
-pub struct AppState {
-    pub db: PgPool,
-    pub redis: ConnectionManager,
-    pub config: Arc<AppConfig>,
-}
+# ── 用户（playmate-user）─────────────────────────────────
+GET    /api/v1/users/me
+PUT    /api/v1/users/me
+GET    /api/v1/users/me/stats              ← 成长值/积分/收藏数/等级
+POST   /api/v1/users/me/tags
+POST   /api/v1/users/me/questionnaire      ← 新人问卷提交
+GET    /api/v1/users/me/career             ← 我的职业名片
+PUT    /api/v1/users/me/career
+GET    /api/v1/users/:id
+GET    /api/v1/users/:id/career
 
-// playmate-gateway/src/main.rs 中初始化
-let state = AppState {
-    db: create_pool(&config.database_url).await,
-    redis: ConnectionManager::new(redis::Client::open(config.redis_url.clone())?).await?,
-    config: Arc::new(config),
-};
+# ── 圈子（playmate-circle）───────────────────────────────
+GET    /api/v1/topics                      ← ?category=hot&page=1
+POST   /api/v1/topics
+GET    /api/v1/topics/:id
+DELETE /api/v1/topics/:id
+POST   /api/v1/topics/:id/like
+DELETE /api/v1/topics/:id/like
+GET    /api/v1/topics/:id/comments
+POST   /api/v1/topics/:id/comments
+DELETE /api/v1/topics/comments/:comment_id
 
-let app = Router::new()
-    .nest("/api/v1/users", user_routes())
-    .nest("/api/v1/im", im_routes())
-    .nest("/api/v1/feed", feed_routes())
-    .nest("/api/v1/match", match_routes())
-    .with_state(state)
-    .layer(cors_layer())
-    .layer(TraceLayer::new_for_http());
+POST   /api/v1/polls
+GET    /api/v1/polls                       ← 今日投票列表
+POST   /api/v1/polls/:id/vote              ← { "side": 1|2 }
+
+GET    /api/v1/circle/groups               ← 社群列表
+POST   /api/v1/circle/groups
+GET    /api/v1/circle/groups/:id
+POST   /api/v1/circle/groups/:id/join
+POST   /api/v1/circle/groups/:id/leave
+GET    /api/v1/circle/groups/:id/messages
+
+# ── 集市-失物招领（playmate-market）─────────────────────
+GET    /api/v1/market/lost-found           ← ?type=1&category=证件&keyword=xx&page=1
+POST   /api/v1/market/lost-found
+GET    /api/v1/market/lost-found/:id
+PUT    /api/v1/market/lost-found/:id
+DELETE /api/v1/market/lost-found/:id
+POST   /api/v1/market/lost-found/:id/resolve
+
+# ── 集市-二手闲置（playmate-market）─────────────────────
+GET    /api/v1/market/second-hand          ← ?category=数码&page=1
+POST   /api/v1/market/second-hand
+GET    /api/v1/market/second-hand/:id
+PUT    /api/v1/market/second-hand/:id
+DELETE /api/v1/market/second-hand/:id
+POST   /api/v1/market/second-hand/:id/sold
+
+# ── 集市-兼职啦（playmate-market）───────────────────────
+GET    /api/v1/market/part-time            ← ?category=促销&page=1
+POST   /api/v1/market/part-time
+GET    /api/v1/market/part-time/:id
+PUT    /api/v1/market/part-time/:id
+DELETE /api/v1/market/part-time/:id
+
+# ── 集市-以物换物（playmate-market）─────────────────────
+GET    /api/v1/market/barter               ← ?page=1
+POST   /api/v1/market/barter
+GET    /api/v1/market/barter/:id
+PUT    /api/v1/market/barter/:id
+DELETE /api/v1/market/barter/:id
+
+# ── 集市-收藏（playmate-market）─────────────────────────
+POST   /api/v1/market/collect
+DELETE /api/v1/market/collect
+GET    /api/v1/market/collect/mine
+
+# ── 搭子（playmate-buddy）───────────────────────────────
+GET    /api/v1/buddy/candidates            ← ?type=1（线上/线下/职业）
+POST   /api/v1/buddy/request               ← 发起搭子请求
+PUT    /api/v1/buddy/request/:id/respond   ← { "accept": true|false }
+GET    /api/v1/buddy/mine                  ← 我的搭子列表
+
+POST   /api/v1/buddy/invitations           ← 发送邀约
+GET    /api/v1/buddy/invitations/sent      ← 我发出的邀约
+GET    /api/v1/buddy/invitations/received  ← 我收到的邀约
+PUT    /api/v1/buddy/invitations/:id/respond
+
+GET    /api/v1/buddy/career                ← 职业搭子阵地列表
+GET    /api/v1/buddy/career/:user_id
+
+# ── 趣玩（静态，无后端接口）────────────────────────────
+
+# ── IM 私信（playmate-im）───────────────────────────────
+GET    /api/v1/im/conversations
+POST   /api/v1/im/conversations
+GET    /api/v1/im/conversations/:id/messages
+WS     /api/v1/im/ws                       ← 统一 WebSocket（私信+社群消息）
+
+# ── 通知（playmate-user）────────────────────────────────
+GET    /api/v1/notifications               ← ?page=1
+POST   /api/v1/notifications/read-all      ← 全部已读
+POST   /api/v1/notifications/:id/read
+
+# ── 反馈（playmate-user）────────────────────────────────
+POST   /api/v1/feedback
+
+# ── 文件上传（playmate-common）──────────────────────────
+POST   /api/v1/upload/avatar
+POST   /api/v1/upload/market               ← 集市图片（通用）
+POST   /api/v1/upload/topic
+POST   /api/v1/upload/voice
 ```
 
 ---
 
-## WebSocket / IM 架构
-
-### 连接管理
+## 应用状态（AppState）
 
 ```rust
-// playmate-im/src/hub.rs
-use dashmap::DashMap;
-use tokio::sync::mpsc;
-use uuid::Uuid;
-
-pub type WsSender = mpsc::UnboundedSender<WsMessage>;
-
-// 全局连接注册表：user_id -> 发送通道
-pub struct ConnectionHub {
-    connections: DashMap<Uuid, WsSender>,
-}
-
-impl ConnectionHub {
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self { connections: DashMap::new() })
-    }
-
-    pub fn register(&self, user_id: Uuid, tx: WsSender) {
-        self.connections.insert(user_id, tx);
-    }
-
-    pub fn unregister(&self, user_id: &Uuid) {
-        self.connections.remove(user_id);
-    }
-
-    pub fn send_to(&self, user_id: &Uuid, msg: WsMessage) -> bool {
-        if let Some(tx) = self.connections.get(user_id) {
-            tx.send(msg).is_ok()
-        } else {
-            false
-        }
-    }
+#[derive(Clone)]
+pub struct AppState {
+    pub db:      PgPool,
+    pub redis:   ConnectionManager,
+    pub config:  Arc<AppConfig>,
+    pub storage: Arc<StorageService>,
+    pub hub:     Arc<ConnectionHub>,   // WebSocket 连接注册表
 }
 ```
 
-### WebSocket 消息协议（JSON）
+---
+
+## WebSocket 协议
+
+统一入口 `WS /api/v1/im/ws`，处理私信 + 社群消息。
 
 ```rust
-// playmate-im/src/protocol.rs
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-
-#[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ClientMessage {
-    /// 发送消息
-    SendMessage {
-        conversation_id: Uuid,
-        msg_type: u8,     // 1文字 2图片 3语音
-        content: Option<String>,
-        media_url: Option<String>,
-    },
-    /// 标记已读
-    MarkRead {
-        conversation_id: Uuid,
-        last_read_at: String,
-    },
-    /// 心跳
+    SendDm          { conversation_id: Uuid, msg_type: u8, content: Option<String>, media_url: Option<String> },
+    SendGroup       { group_id: Uuid, msg_type: u8, content: Option<String>, media_url: Option<String> },
+    MarkRead        { conversation_id: Uuid },
     Ping,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
-    /// 新消息推送
-    NewMessage {
-        message_id: Uuid,
-        conversation_id: Uuid,
-        sender_id: Uuid,
-        msg_type: u8,
-        content: Option<String>,
-        media_url: Option<String>,
-        created_at: String,
-    },
-    /// 消息发送确认
-    MessageAck {
-        message_id: Uuid,
-        status: String,   // "delivered" | "failed"
-    },
-    /// 对方正在输入
-    Typing {
-        conversation_id: Uuid,
-        user_id: Uuid,
-    },
-    /// 心跳响应
+    NewDm           { message_id: Uuid, conversation_id: Uuid, sender_id: Uuid, msg_type: u8, content: Option<String>, created_at: String },
+    NewGroup        { message_id: Uuid, group_id: Uuid, sender_id: Uuid, msg_type: u8, content: Option<String>, created_at: String },
+    NewNotification { notification_id: Uuid, ntype: String, title: String, content: Option<String> },
+    MessageAck      { message_id: Uuid, status: String },
     Pong,
-    /// 错误通知
-    Error {
-        code: String,
-        message: String,
-    },
-}
-```
-
-### WebSocket Handler 模板
-
-```rust
-// playmate-im/src/handler.rs
-pub async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-    Extension(current_user): Extension<CurrentUser>,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state, current_user))
-}
-
-async fn handle_socket(socket: WebSocket, state: AppState, user: CurrentUser) {
-    let (mut sender, mut receiver) = socket.split();
-    let (tx, mut rx) = mpsc::unbounded_channel::<ServerMessage>();
-
-    // 注册连接
-    state.hub.register(user.id, tx);
-
-    // 更新在线状态到 Redis
-    let _ = set_online(&state.redis, user.id).await;
-
-    // 发送任务
-    let send_task = tokio::spawn(async move {
-        while let Some(msg) = rx.recv().await {
-            let text = serde_json::to_string(&msg).unwrap();
-            if sender.send(Message::Text(text)).await.is_err() {
-                break;
-            }
-        }
-    });
-
-    // 接收任务
-    while let Some(Ok(msg)) = receiver.next().await {
-        if let Message::Text(text) = msg {
-            match serde_json::from_str::<ClientMessage>(&text) {
-                Ok(client_msg) => {
-                    handle_client_message(&state, &user, client_msg).await;
-                }
-                Err(_) => {
-                    // 忽略解析失败的消息
-                }
-            }
-        }
-    }
-
-    // 清理
-    state.hub.unregister(&user.id);
-    let _ = set_offline(&state.redis, user.id).await;
-    send_task.abort();
+    Error           { code: String, message: String },
 }
 ```
 
@@ -564,381 +706,236 @@ async fn handle_socket(socket: WebSocket, state: AppState, user: CurrentUser) {
 
 ## 认证规范
 
-### JWT 结构
+### 登录流程
 
-```rust
-// playmate-common/src/auth.rs
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Claims {
-    pub sub: Uuid,          // user_id
-    pub username: String,
-    pub exp: usize,         // 过期时间戳
-    pub iat: usize,         // 签发时间戳
-}
-
-// Token 有效期：Access Token 2小时，Refresh Token 30天
-pub const ACCESS_TOKEN_DURATION: i64 = 2 * 60 * 60;
-pub const REFRESH_TOKEN_DURATION: i64 = 30 * 24 * 60 * 60;
+```
+1. POST /auth/sms/send        → 发送验证码
+2. POST /auth/sms/verify      → 验证 → 返回 JWT + { is_new_user: bool }
+3. 若 is_new_user=true        → Flutter 跳转新人问卷页
+4. POST /users/me/questionnaire → 提交问卷 → 跳转首页
 ```
 
-### Auth 中间件
+### JWT
 
 ```rust
-// playmate-common/src/middleware/auth.rs
-// 使用 axum 的 FromRequestParts 实现提取器
-pub struct CurrentUser {
-    pub id: Uuid,
-    pub username: String,
-}
-
-#[async_trait]
-impl<S> FromRequestParts<S> for CurrentUser
-where
-    S: Send + Sync + AsRef<AppConfig>,
-{
-    type Rejection = AppError;
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let token = extract_bearer_token(parts)
-            .ok_or_else(|| AppError::Unauthorized("缺少 Authorization header".to_string()))?;
-
-        let config = state.as_ref();
-        let claims = verify_token(token, &config.jwt_secret)
-            .map_err(|_| AppError::Unauthorized("Token 无效或已过期".to_string()))?;
-
-        Ok(CurrentUser {
-            id: claims.sub,
-            username: claims.username,
-        })
-    }
-}
+pub struct Claims { pub sub: Uuid, pub username: String, pub exp: usize, pub iat: usize }
+// Access Token: 2h，Refresh Token: 30d
 ```
 
-### 路由保护方式
+### Redis Key 规范
 
-```rust
-// 需要认证的路由，直接在 handler 参数中加 CurrentUser
-pub async fn get_profile(
-    State(state): State<AppState>,
-    current_user: CurrentUser,         // ← 自动验证 JWT
-) -> Result<impl IntoResponse, AppError> {
-    // ...
-}
-
-// 公开路由，不加 CurrentUser
-pub async fn login(
-    State(state): State<AppState>,
-    Json(payload): Json<LoginRequest>,
-) -> Result<impl IntoResponse, AppError> {
-    // ...
-}
+```
+sms:code:{phone}                  → 验证码（TTL 300s）
+sms:limit:{phone}                 → 发送限流（TTL 60s）
+session:refresh:{user_id}:{hash}  → refresh token（TTL 30d）
+online:user:{user_id}             → 在线状态（TTL 60s，心跳续期）
+unread:dm:{user_id}:{conv_id}     → 私信未读数
+unread:group:{user_id}:{group_id} → 社群未读数
+unread:notify:{user_id}           → 通知未读数
+rate:limit:{ip}:{endpoint}        → 限流计数（TTL 60s）
 ```
 
 ---
 
-## Redis 使用规范
-
-### Key 命名约定
-
-```
-# 用户在线状态
-online:user:{user_id}                    → "1"（TTL: 60s，心跳续期）
-
-# 用户 Session
-session:refresh:{user_id}:{token_hash}  → refresh_token（TTL: 30d）
-
-# 消息未读数
-unread:{user_id}:{conversation_id}      → 数字
-
-# 匹配队列
-match:queue:{gender}                    → List，存 user_id
-
-# Feed 缓存
-feed:user:{user_id}                     → List，存 post_id（最新50条）
-
-# 限流
-rate:limit:{ip}:{endpoint}             → 计数器（TTL: 60s）
-```
-
-### Redis 操作封装
-
-```rust
-// playmate-common/src/cache.rs
-use redis::AsyncCommands;
-use uuid::Uuid;
-
-pub async fn set_online(redis: &ConnectionManager, user_id: Uuid) -> AppResult<()> {
-    let mut conn = redis.clone();
-    conn.set_ex(
-        format!("online:user:{}", user_id),
-        "1",
-        60,  // 60秒 TTL，客户端每30秒发心跳续期
-    ).await?;
-    Ok(())
-}
-
-pub async fn is_online(redis: &ConnectionManager, user_id: Uuid) -> AppResult<bool> {
-    let mut conn = redis.clone();
-    let exists: bool = conn.exists(format!("online:user:{}", user_id)).await?;
-    Ok(exists)
-}
-
-pub async fn incr_unread(
-    redis: &ConnectionManager,
-    user_id: Uuid,
-    conversation_id: Uuid,
-) -> AppResult<()> {
-    let mut conn = redis.clone();
-    conn.incr(
-        format!("unread:{}:{}", user_id, conversation_id),
-        1i64,
-    ).await?;
-    Ok(())
-}
-```
-
----
-
-## 配置管理
-
-### 环境变量（本地开发用 .env 文件）
+## 对象存储规范
 
 ```bash
-# .env（不提交 git）
+# 开发（MinIO）
+STORAGE_ENDPOINT=http://localhost:9000
+STORAGE_PUBLIC_ENDPOINT=http://8.138.190.48:9000
+STORAGE_ACCESS_KEY=playmate
+STORAGE_SECRET_KEY=playmate123
+STORAGE_REGION=us-east-1
+
+# 生产（阿里云 OSS，上线切换，代码零改动）
+# STORAGE_ENDPOINT=https://oss-cn-hangzhou-internal.aliyuncs.com
+# STORAGE_PUBLIC_ENDPOINT=https://bucket.oss-cn-hangzhou.aliyuncs.com
+# STORAGE_ACCESS_KEY=...  STORAGE_SECRET_KEY=...  STORAGE_REGION=cn-hangzhou
+```
+
+| Bucket | 用途 |
+|--------|------|
+| `avatars` | 用户头像 |
+| `market` | 集市图片（4种内容通用） |
+| `topics` | 话题配图 |
+| `voices` | 语音消息 |
+
+---
+
+## 环境变量完整清单
+
+```bash
 DATABASE_URL=postgres://playmate:playmate@localhost:5432/playmate
 REDIS_URL=redis://localhost:6379
-JWT_SECRET=dev-secret-change-in-production-min-32-chars
-JWT_REFRESH_SECRET=dev-refresh-secret-change-in-production
-
+JWT_SECRET=至少32位随机字符串
+JWT_REFRESH_SECRET=另一个32位随机字符串
 SERVER_HOST=0.0.0.0
 SERVER_PORT=8080
-
-# 日志级别
 RUST_LOG=playmate=debug,tower_http=debug,sqlx=warn
-```
-
-### 配置结构
-
-```rust
-// playmate-common/src/config.rs
-use serde::Deserialize;
-
-#[derive(Deserialize, Clone)]
-pub struct AppConfig {
-    pub database_url: String,
-    pub redis_url: String,
-    pub jwt_secret: String,
-    pub jwt_refresh_secret: String,
-    pub server_host: String,
-    pub server_port: u16,
-}
-
-impl AppConfig {
-    pub fn from_env() -> anyhow::Result<Self> {
-        Ok(envy::from_env::<AppConfig>()?)
-    }
-}
-```
-
-### docker-compose.yml（本地开发）
-
-```yaml
-version: '3.8'
-services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: playmate
-      POSTGRES_PASSWORD: playmate
-      POSTGRES_DB: playmate
-    ports:
-      - "5432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
-
-volumes:
-  pg_data:
+WECHAT_APP_ID=wx...
+WECHAT_APP_SECRET=...
+ALIYUN_SMS_ACCESS_KEY=...
+ALIYUN_SMS_SECRET=...
+ALIYUN_SMS_SIGN_NAME=玩伴
+ALIYUN_SMS_TEMPLATE_CODE=SMS_...
+STORAGE_ENDPOINT=http://localhost:9000
+STORAGE_PUBLIC_ENDPOINT=http://8.138.190.48:9000
+STORAGE_ACCESS_KEY=playmate
+STORAGE_SECRET_KEY=playmate123
+STORAGE_REGION=us-east-1
+POSTGRES_PASSWORD=playmate
+MINIO_ROOT_USER=playmate
+MINIO_ROOT_PASSWORD=playmate123
 ```
 
 ---
 
-## API 路由规范
+## Flutter 客户端规范
 
-### URL 风格
+### 路由（go_router）
 
 ```
-POST   /api/v1/auth/register
-POST   /api/v1/auth/login
-POST   /api/v1/auth/refresh
-POST   /api/v1/auth/logout
+/auth/login
+/auth/register
+/auth/questionnaire          ← 新人问卷（is_new_user=true 时跳转）
 
-GET    /api/v1/users/me
-PUT    /api/v1/users/me
-GET    /api/v1/users/:id
-POST   /api/v1/users/me/tags
+/circle                      ← Tab1 圈子
+/circle/topic/:id
+/circle/poll/:id
+/circle/groups               ← 社群列表
+/circle/groups/:id           ← 社群聊天页
 
-GET    /api/v1/im/conversations
-POST   /api/v1/im/conversations
-GET    /api/v1/im/conversations/:id/messages
-POST   /api/v1/im/conversations/:id/messages       ← REST备用（主要用WS）
-WS     /api/v1/im/ws                               ← WebSocket 主入口
+/market                      ← Tab2 集市
+/market/lost-found
+/market/lost-found/:id
+/market/lost-found/publish
+/market/second-hand
+/market/second-hand/:id
+/market/second-hand/publish
+/market/part-time
+/market/part-time/:id
+/market/part-time/publish
+/market/barter
+/market/barter/:id
+/market/barter/publish
 
-GET    /api/v1/feed/posts
-POST   /api/v1/feed/posts
-GET    /api/v1/feed/posts/:id
-DELETE /api/v1/feed/posts/:id
-POST   /api/v1/feed/posts/:id/like
+/buddy                       ← Tab3 搭子
+/buddy/candidates
+/buddy/invitations           ← 邀约管理
+/buddy/career                ← 职业搭子阵地
 
-GET    /api/v1/match/candidates                    ← 获取匹配候选
-POST   /api/v1/match/respond                       ← 响应匹配
+/fun                         ← Tab4 趣玩（静态）
+
+/profile                     ← Tab5 我的
+/profile/notifications       ← 消息中心
+/profile/collects            ← 收藏列表
+/profile/member              ← 会员中心
+/profile/growth-report       ← 成长报告
+/profile/feedback            ← 需求反馈
+/profile/settings            ← 设置（账号找回/注销入口）
+
+/im/chat/:conversationId     ← 私信聊天
 ```
 
-### Request/Response 命名
+### 设计规范
 
-- Request 结构体：`{动作}{资源}Request`，如 `CreatePostRequest`、`LoginRequest`
-- Response 结构体：`{资源}Response`，如 `UserResponse`、`MessageResponse`
-- 分页响应统一包装：
+- 主色：`#FF7A00`（活力橙）
+- 辅色：`#5DCAA5`（绿）
+- 强调：`#E24B4A`（红）
+- 页面背景：`#FFF8EC`（暖米黄）
+- 圆角：卡片 12px，按钮 8px，标签 20px，头像 50%
+- Tab 激活色：`#FF7A00`
 
-```rust
-#[derive(Serialize)]
-pub struct PageResponse<T: Serialize> {
-    pub items: Vec<T>,
-    pub total: i64,
-    pub page: i64,
-    pub limit: i64,
-    pub has_more: bool,
-}
+### 项目结构
+
 ```
+flutter_app/lib/
+├── app/
+│   ├── app.dart
+│   ├── router.dart
+│   └── theme.dart
+├── core/
+│   ├── network/       ← Dio + JWT interceptor
+│   ├── storage/       ← flutter_secure_storage
+│   └── error/
+├── shared/
+│   └── widgets/       ← Pm 前缀公共组件
+└── features/
+    ├── auth/          ← 登录/注册/问卷
+    ├── circle/        ← 话题/投票/社群
+    ├── market/
+    │   ├── lost_found/
+    │   ├── second_hand/
+    │   ├── part_time/
+    │   └── barter/
+    ├── buddy/         ← 搭子/邀约/职业阵地
+    ├── fun/           ← 趣玩静态
+    ├── im/            ← 私信
+    └── profile/       ← 我的/通知/收藏/反馈
+```
+
+### 状态管理
+
+统一用 `flutter_riverpod`（AsyncNotifier），禁止跨页面 setState。
 
 ---
 
-## 匹配算法规范
+## 代码规范
 
-### 匹配分计算逻辑
-
-```rust
-// playmate-match/src/algorithm.rs
-
-pub fn calculate_match_score(user_a: &UserProfile, user_b: &UserProfile) -> u8 {
-    let mut score = 0u32;
-
-    // 共同标签（最高 60 分）
-    let common_tags = user_a.tag_ids.iter()
-        .filter(|t| user_b.tag_ids.contains(t))
-        .count();
-    let tag_score = (common_tags as f32 / user_a.tag_ids.len().max(1) as f32 * 60.0) as u32;
-    score += tag_score;
-
-    // 年龄差（最高 20 分）
-    if let (Some(age_a), Some(age_b)) = (user_a.age(), user_b.age()) {
-        let age_diff = (age_a as i32 - age_b as i32).abs();
-        let age_score = if age_diff <= 2 { 20 }
-            else if age_diff <= 5 { 15 }
-            else if age_diff <= 10 { 10 }
-            else { 0 };
-        score += age_score;
-    }
-
-    // 性别偏好（20 分）
-    // 按需扩展...
-
-    score.min(100) as u8
-}
-```
-
----
-
-## 代码生成规则（Claude Code 必须遵守）
-
-### 文件头注释格式
+### Handler 模板
 
 ```rust
-//! {模块简要说明}
-//!
-//! # 功能
-//! - 功能点1
-//! - 功能点2
-```
-
-### 每个 handler 的结构模板
-
-```rust
-/// {接口说明}
-///
-/// # 错误
-/// - `401 Unauthorized` - Token 缺失或无效
-/// - `404 NotFound` - 资源不存在
 pub async fn handler_name(
     State(state): State<AppState>,
     current_user: CurrentUser,
     Json(payload): Json<RequestType>,
 ) -> Result<impl IntoResponse, AppError> {
-    // 1. 参数验证
     payload.validate().map_err(|e| AppError::BadRequest(e.to_string()))?;
-
-    // 2. 业务逻辑
-    let result = do_something(&state.db, &payload).await?;
-
-    // 3. 返回响应
+    let result = repo_fn(&state.db, &payload).await?;
     Ok(ApiResponse::ok(result))
 }
 ```
 
 ### 禁止事项
 
-- 禁止在 handler 层直接写复杂 SQL，超过 3 行 SQL 抽成 repository 函数
-- 禁止在不同 crate 间直接访问对方的数据库表（通过 common 的 repository 函数共享）
-- 禁止硬编码任何配置（端口、密钥、URL）
-- 禁止 `clone()` PgPool 以外的大型结构体（PgPool 本身是 Arc，clone 是廉价的）
-- 禁止在异步上下文中使用阻塞 IO（用 `tokio::fs`、`tokio::io`）
+- handler 层禁止直接写复杂 SQL（超过3行抽到 repo 函数）
+- 禁止 `unwrap()` / `expect()`（测试和 main 初始化除外）
+- 禁止硬编码任何配置值
+- 禁止在异步上下文使用阻塞 IO
 
 ---
 
-## 开发启动流程
+## 开发启动
 
 ```bash
-# 1. 启动基础设施
-cd infra && docker-compose up -d
-
-# 2. 运行数据库迁移
+cd infra && docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 sqlx migrate run --source infra/migrations
-
-# 3. 启动后端（开发模式，文件变更自动重启）
-cargo install cargo-watch
 cargo watch -x "run --bin playmate-gateway"
-
-# 4. 检查代码
-cargo clippy -- -D warnings
-cargo fmt --check
+cargo clippy -- -D warnings && cargo fmt --check
 ```
 
 ---
 
 ## 当前开发状态
 
-### 已完成
-- [ ] 项目骨架和 Workspace 配置
-- [ ] 基础设施 docker-compose
-- [ ] common crate（错误类型、响应格式、AppState）
+### 后端（按优先级）
+- [ ] infra/migrations/ — 22个迁移文件
+- [ ] playmate-common — error/response/state/jwt/cache/storage
+- [ ] playmate-gateway — 路由聚合、main.rs
+- [ ] playmate-user — 注册/登录/短信/微信/问卷/通知/反馈
+- [ ] playmate-circle — 话题/投票/评论/社群
+- [ ] playmate-market — 失物/闲置/兼职/换物（优先失物招领）
+- [ ] playmate-buddy — 搭子/邀约/职业阵地
+- [ ] playmate-im — 私信/WebSocket
 
-### 进行中
-- [ ] 用户注册/登录接口
-- [ ] JWT 认证中间件
-
-### 待开始
-- [ ] IM WebSocket 核心
-- [ ] 动态广场 CRUD
-- [ ] 匹配算法实现
-- [ ] Flutter 客户端
+### Flutter（按优先级）
+- [ ] 项目骨架（app/core/shared）
+- [ ] 登录 + 新人问卷流程
+- [ ] Tab2 集市（失物招领优先）
+- [ ] Tab1 圈子
+- [ ] Tab3 搭子
+- [ ] Tab5 我的
+- [ ] Tab4 趣玩（静态）
 
 ---
 
@@ -946,371 +943,156 @@ cargo fmt --check
 
 | 需求 | 方案 |
 |------|------|
-| 密码加密 | `argon2` crate |
-| UUID生成 | `Uuid::new_v4()` |
+| 密码加密 | `argon2` |
+| UUID | `Uuid::new_v4()` |
 | 时间戳 | `chrono::Utc::now()` |
-| JSON序列化 | `serde_json` |
-| 参数校验 | `validator` crate + `#[derive(Validate)]` |
+| 参数校验 | `validator` + `#[derive(Validate)]` |
 | 日志 | `tracing::info!` / `tracing::error!` |
-| 随机数 | `rand::thread_rng()` |
-| Base64 | `base64` crate |
-| HTTP客户端（服务间） | `reqwest` with `rustls-tls` feature |
-
-### 页面 UI 规范
-
-#### 1. 登录页（/auth/login）
-- 顶部：Logo圆角方块（44px，主色背景）+ "欢迎来到玩伴" 标题 + "遇见有趣的灵魂" 副标题
-- 表单：手机号/邮箱输入框、密码输入框（高度36px，圆角8px，背景次要色）
-- 主按钮：高度36px，圆角10px，主色 #7F77DD，文字"登录"
-- 底部：注册跳转链接（主色文字）、第三方登录（微信/Apple，并排）
-
-#### 2. 发现页（/discover，底部导航第1个Tab）
-- 顶部栏：左"筛选"文字、中"发现玩伴"标题、右头像圆形按钮
-- 主卡片（圆角16px）：
-  - 上半：用户大头像 + 右上角匹配分徽章（主色背景，白字，"匹配 XX%"）
-  - 下半：姓名+年龄、城市+职业、兴趣标签（胶囊，主色浅背景）
-- 底部操作：左"跳过"（描边按钮）、右"心动"（主色填充按钮）
-- 下方：其他候选人小卡片（2列网格，60px高）
-
-#### 3. 消息列表页（/im，底部导航第2个Tab）
-- 顶部栏：中"消息"标题、右"编辑"文字（主色）
-- 列表项（高度56px）：左头像（36px圆形，各用户不同颜色）、
-  中间姓名+最新消息预览（截断）、右侧时间+未读数红点（主色背景）
-
-#### 4. 聊天页（/im/:conversationId）
-- 顶部栏：左"‹"返回、中头像+名字+在线状态（辅色绿点）、右"···"菜单
-- 消息区：对方气泡（左对齐，次要色背景）、我的气泡（右对齐，主色背景白字）
-- 底部输入栏：左表情按钮、中输入框（胶囊形）、右发送按钮（主色圆形）
-
-#### 5. 动态广场（/feed，底部导航第3个Tab）
-- 顶部栏：中"动态"标题、右"+"发帖按钮（主色圆形）
-- 帖子卡片：头像+名字+标签分类+时间、正文文字、可选图片（圆角8px）
-  底部操作栏：点赞数、评论数、更多（···）
-
-#### 6. 个人主页（/profile，底部导航第4个Tab）
-- 顶部：渐变封面（主色到辅色）、大头像（48px，压住封面底部）
-- 信息区：昵称（500weight）、个性签名（次要色，多行）
-- 数据栏：关注/粉丝/玩伴 三列，竖线分隔
-- 兴趣标签：标签胶囊列表
-- 底部："编辑资料"描边按钮（全宽）
+| HTTP客户端 | `reqwest` with `rustls-tls` |
+| S3存储 | `aws-sdk-s3`，`force_path_style=true` |
+| 短信 | `reqwest` 调阿里云 Dysmsapi |
+| 微信换openid | `reqwest` GET `api.weixin.qq.com/sns/oauth2/access_token` |
+| 验证码 | `rand::thread_rng().gen_range(100000..999999)` |
+| 失物编号 | `{MM}-{DD}{HH}-{mm}-{ss}` 格式如 `05-058-26-32` |
+| 通知推送 | WebSocket 实时推送 + notifications 表持久化 |
 
 ---
 
-## 认证方式规范（playmate-user 服务）
+## 补充规范（来自设计规范PPT，2026-04-05）
 
-### 支持的登录方式
-1. 手机号 + 短信验证码（主要登录方式）
-2. 微信 OAuth（openid 换 JWT）
-3. 账号 + 密码（注册时可选设置）
+### Tab 顺序（以此为准）
 
-### playmate-user 内部结构
+PPT 明确的底部导航顺序：
 
-```
-playmate-user/
-└── src/
-    ├── main.rs
-    ├── routes.rs
-    ├── handler/
-    │   ├── auth.rs            ← 登录/注册/刷新token/登出
-    │   ├── profile.rs         ← 用户资料
-    │   └── tag.rs             ← 兴趣标签
-    ├── service/
-    │   ├── auth_service.rs    ← 认证核心逻辑
-    │   ├── sms_service.rs     ← 短信验证码（阿里云）
-    │   ├── wechat_service.rs  ← 微信 OAuth
-    │   └── token_service.rs   ← JWT 签发/刷新
-    ├── model/
-    │   ├── user.rs
-    │   └── auth.rs            ← 请求/响应结构体
-    └── repo/
-        └── user_repo.rs       ← 数据库操作
-```
+| 位置 | Tab | 说明 |
+|------|-----|------|
+| 1 | 搭子 | 默认首页 |
+| 2 | 趣玩 | 活动中心（MVP静态） |
+| 3 | 圈子 | 话题/投票/社群 |
+| 4 | 集市 | 失物/闲置/兼职/换物 |
+| 5 | 我的 | 个人中心 |
 
-### 短信验证码接口
+> 注意：之前路由规范里 Tab 顺序有误，Flutter 开发以此表为准。
 
-```
-POST /api/v1/auth/sms/send    → { "phone": "13800138000" }
-POST /api/v1/auth/sms/verify  → { "phone": "13800138000", "code": "123456" }
+### 用户准入规则
+
+- 平台仅面向 **35岁及以下** 用户开放
+- 注册时需校验年龄（生日字段必填）
+- 超龄用户注册时提示不符合准入条件
+
+```rust
+// playmate-user 注册逻辑中加入年龄校验
+fn check_age_limit(birthday: NaiveDate) -> AppResult<()> {
+    let age = calculate_age(birthday);
+    if age > 35 {
+        return Err(AppError::Business("抱歉，本平台仅面向35岁及以下用户".to_string()));
+    }
+    Ok(())
+}
 ```
 
-Redis Key 规范：
-```
-sms:code:{phone}   → 验证码明文（TTL: 300s）
-sms:limit:{phone}  → 发送限流（TTL: 60s，存在则拒绝重发）
-```
-
-供应商：阿里云 SMS（Dysmsapi），通过 `reqwest` 调 HTTP API。
-
-### 微信登录接口
-
-```
-POST /api/v1/auth/wechat/login → { "code": "wx_oauth_code" }
-```
-
-流程：客户端完成微信授权拿到 code → 传给后端 → 后端用 code 换 openid（调微信接口）
-→ 查 user_oauth 表，存在直接登录，不存在自动创建用户 → 返回 JWT。
-
-### 新增数据库表
+### 信用分体系（MVP展示，后期迭代计算逻辑）
 
 ```sql
--- 第三方账号绑定（支持后续扩展 Apple/Google）
-CREATE TABLE user_oauth (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    provider    VARCHAR(20) NOT NULL,    -- 'wechat' | 'apple' | 'google'
-    provider_id VARCHAR(128) NOT NULL,   -- 微信的 openid / unionid
-    access_token TEXT,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (provider, provider_id)
+-- 补充到 user_stats 表
+ALTER TABLE user_stats ADD COLUMN IF NOT EXISTS
+    credit_score INTEGER NOT NULL DEFAULT 600;  -- 600起步，满分1000
+-- 展示规则：< 700 普通，700-799 良好，800-899 优秀，900+ 极佳
+```
+
+信用分在以下页面展示：
+- 搭子详情页：「信用分：850 (优秀)」
+- 搭子管理页：列表项显示信用分
+- MVP 阶段：默认给所有用户 750 分，不做动态计算
+
+### 新人问卷字段（补充详情）
+
+```sql
+-- 更新 user_questionnaire 表字段说明
+-- interests: JSONB          多选 3-10 个兴趣标签ID
+-- purposes:  JSONB          搭子需求 1-5 个，如饭搭子/学习搭子/运动搭子
+-- identity:  VARCHAR(20)    单选：student/worker/family/other
+-- city:      VARCHAR(50)    所在城市（地级市）
+-- age_range: VARCHAR(10)    '18-22'/'23-28'/'29-35'
+-- personality: JSONB NULL   性格测试结果（选填，后期接入MBTI）
+-- life_goal: TEXT NULL      生活习惯/目标（选填）
+```
+
+问卷接口补充：
+```
+POST /api/v1/users/me/questionnaire
+{
+  "identity": "student",
+  "city": "上海",
+  "interests": [1, 3, 7, 12],     // tag_id 数组，3-10个
+  "purposes": [2, 5],              // tag_id 数组，1-5个
+  "age_range": "23-28",
+  "personality": null,             // 选填
+  "life_goal": null                // 选填
+}
+```
+
+### 学习笔记模块（补充）
+
+「我的」功能中心新增「学习笔记」入口，MVP 先做基础功能：
+
+```sql
+-- 新增迁移文件 20260405000023_create_learning_notes.sql
+CREATE TABLE learning_notes (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title      VARCHAR(200),
+    content    TEXT NOT NULL,
+    category   VARCHAR(32),    -- 话题笔记/活动笔记/个人记录
+    source_type VARCHAR(20),   -- 'topic'|'activity'|'manual'
+    source_id  UUID,           -- 来源ID（话题/活动）
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX idx_learning_notes_user ON learning_notes(user_id, created_at DESC);
 ```
 
-users 表 phone 字段已有（见核心表结构），确保加了 UNIQUE 约束。
-
-### 新增环境变量
-
-```bash
-# 微信开放平台
-WECHAT_APP_ID=wx...
-WECHAT_APP_SECRET=...
-
-# 阿里云短信
-ALIYUN_SMS_ACCESS_KEY=...
-ALIYUN_SMS_SECRET=...
-ALIYUN_SMS_SIGN_NAME=玩伴
-ALIYUN_SMS_TEMPLATE_CODE=SMS_...
+路由补充：
+```
+GET    /api/v1/notes               ← 我的笔记列表
+POST   /api/v1/notes               ← 新建笔记
+GET    /api/v1/notes/:id
+PUT    /api/v1/notes/:id
+DELETE /api/v1/notes/:id
 ```
 
-### AppConfig 补充字段
-
-```rust
-// playmate-common/src/config.rs 补充
-pub struct AppConfig {
-    // ... 原有字段 ...
-    pub wechat_app_id: String,
-    pub wechat_app_secret: String,
-    pub aliyun_sms_access_key: String,
-    pub aliyun_sms_secret: String,
-    pub aliyun_sms_sign_name: String,
-    pub aliyun_sms_template_code: String,
-}
+Flutter 路由补充：
+```
+/profile/notes          ← 学习笔记列表
+/profile/notes/:id      ← 笔记详情/编辑
 ```
 
-### 快速参考补充
+### TabBar 高度规范
 
-| 需求 | 方案 |
-|------|------|
-| 短信发送 | `reqwest` 调阿里云 Dysmsapi HTTP 接口 |
-| 微信换 openid | `reqwest` GET `api.weixin.qq.com/sns/oauth2/access_token` |
-| 验证码生成 | `rand::thread_rng().gen_range(100000..999999).to_string()` |
-| 第三方登录绑定 | `user_oauth` 表，provider + provider_id 唯一索引 |
+PPT 明确：底部 TabBar 固定高度 **98px**，悬浮于底部，全局固定显示。
 
----
-
-## 对象存储规范
-
-### 策略：开发用 MinIO，生产换阿里云 OSS
-
-代码只写一套 S3 兼容接口，通过环境变量切换，上线时**零代码改动**。
+### 搭子详情页核心字段
 
 ```
-开发环境：MinIO（本地 Docker）
-生产环境：阿里云 OSS（S3 兼容模式）
+搭子名片展示内容：
+- 头像 + 昵称
+- 认证标签：「实名认证 · 职业搭子」或「实名认证 · 兴趣搭子」
+- 信用分 + 评级（优秀/极佳等）
+- 兴趣标签（最多5个）
+- 自我介绍（关于我）
+- 能提供的服务描述
+- 用户评价（最近3条）
+- 操作按钮：「发起邀约」「查看阵地」
 ```
 
-### docker-compose.yml 新增 MinIO
+### 消息通知分类（补充）
 
-```yaml
-# 追加到 infra/docker-compose.yml 的 services 里
-  minio:
-    image: minio/minio:latest
-    container_name: playmate-minio
-    restart: always
-    ports:
-      - "9000:9000"    # API 端口
-      - "9001:9001"    # 控制台端口
-    environment:
-      MINIO_ROOT_USER: playmate
-      MINIO_ROOT_PASSWORD: playmate123
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_data:/data
+消息中心分4个 Tab：**全部 / 系统通知 / 搭子邀约 / 互动消息**
 
-# volumes 里追加
-  minio_data:
+对应 notifications 表的 type 字段值：
 ```
-
-启动后访问 http://localhost:9001，用 playmate / playmate123 登录，手动创建 bucket：`avatars`、`posts`、`voices`。
-
-### Cargo.toml 新增依赖
-
-```toml
-# workspace.dependencies 追加
-aws-sdk-s3 = "1"
-aws-config = { version = "1", default-features = false, features = ["behavior-version-latest"] }
-tokio-multipart = "0.1"   # 文件上传解析
+system          → 系统通知（活动提醒等）
+buddy_request   → 搭子邀约（接受/拒绝）
+interaction     → 互动消息（点赞/评论/回复）
+invitation      → 邀约消息
 ```
-
-### 存储服务封装（playmate-common/src/storage.rs）
-
-```rust
-//! 对象存储服务封装
-//! 兼容 MinIO（开发）和阿里云 OSS（生产），通过环境变量切换
-
-use aws_sdk_s3::{Client, Config};
-use aws_sdk_s3::config::{Credentials, Region};
-use uuid::Uuid;
-
-pub struct StorageService {
-    client: Client,
-    bucket_prefix: String,  // 可选前缀，区分环境
-}
-
-impl StorageService {
-    pub async fn from_config(config: &AppConfig) -> Self {
-        let creds = Credentials::new(
-            &config.storage_access_key,
-            &config.storage_secret_key,
-            None, None, "playmate",
-        );
-
-        let s3_config = Config::builder()
-            .endpoint_url(&config.storage_endpoint)
-            .credentials_provider(creds)
-            .region(Region::new(config.storage_region.clone()))
-            .force_path_style(true)   // MinIO 必须开启，OSS 也兼容
-            .build();
-
-        Self {
-            client: Client::from_conf(s3_config),
-            bucket_prefix: config.storage_bucket_prefix.clone(),
-        }
-    }
-
-    /// 上传文件，返回公开访问 URL
-    pub async fn upload(
-        &self,
-        bucket: &str,          // "avatars" | "posts" | "voices"
-        data: Vec<u8>,
-        content_type: &str,    // "image/jpeg" | "image/png" | "audio/m4a"
-    ) -> AppResult<String> {
-        let key = format!("{}/{}.{}", 
-            chrono::Utc::now().format("%Y/%m/%d"),
-            Uuid::new_v4(),
-            mime_to_ext(content_type),
-        );
-
-        self.client
-            .put_object()
-            .bucket(bucket)
-            .key(&key)
-            .body(data.into())
-            .content_type(content_type)
-            .send()
-            .await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("上传失败: {}", e)))?;
-
-        // 返回可访问的 URL
-        Ok(format!("{}/{}/{}", self.endpoint_public_url, bucket, key))
-    }
-
-    /// 删除文件
-    pub async fn delete(&self, bucket: &str, key: &str) -> AppResult<()> {
-        self.client
-            .delete_object()
-            .bucket(bucket)
-            .key(key)
-            .send()
-            .await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("删除失败: {}", e)))?;
-        Ok(())
-    }
-}
-
-fn mime_to_ext(mime: &str) -> &str {
-    match mime {
-        "image/jpeg" => "jpg",
-        "image/png"  => "png",
-        "image/webp" => "webp",
-        "audio/m4a"  => "m4a",
-        "audio/mpeg" => "mp3",
-        "video/mp4"  => "mp4",
-        _            => "bin",
-    }
-}
-```
-
-### Bucket 规划
-
-| Bucket | 用途 | 文件类型 |
-|--------|------|---------|
-| `avatars` | 用户头像 | jpg / png / webp |
-| `posts` | 动态图片/视频 | jpg / png / mp4 |
-| `voices` | 语音消息 | m4a / mp3 |
-
-### 环境变量
-
-```bash
-# 开发环境（MinIO）
-STORAGE_ENDPOINT=http://localhost:9000
-STORAGE_PUBLIC_ENDPOINT=http://localhost:9000
-STORAGE_ACCESS_KEY=playmate
-STORAGE_SECRET_KEY=playmate123
-STORAGE_REGION=us-east-1
-
-# 生产环境（阿里云 OSS）—— 只改这几行，代码不动
-# STORAGE_ENDPOINT=https://oss-cn-hangzhou-internal.aliyuncs.com  # 内网节点（服务器访问免费）
-# STORAGE_PUBLIC_ENDPOINT=https://你的bucket.oss-cn-hangzhou.aliyuncs.com
-# STORAGE_ACCESS_KEY=阿里云AccessKeyId
-# STORAGE_SECRET_KEY=阿里云AccessKeySecret
-# STORAGE_REGION=cn-hangzhou
-```
-
-### AppConfig 补充字段
-
-```rust
-pub struct AppConfig {
-    // ... 原有字段 ...
-    pub storage_endpoint: String,
-    pub storage_public_endpoint: String,
-    pub storage_access_key: String,
-    pub storage_secret_key: String,
-    pub storage_region: String,
-}
-```
-
-### AppState 补充
-
-```rust
-#[derive(Clone)]
-pub struct AppState {
-    pub db: PgPool,
-    pub redis: ConnectionManager,
-    pub config: Arc<AppConfig>,
-    pub storage: Arc<StorageService>,   // ← 新增
-}
-```
-
-### 文件上传接口规范
-
-```
-POST /api/v1/upload/avatar   → 头像上传，返回 avatar_url
-POST /api/v1/upload/post     → 动态图片/视频，返回 media_url
-POST /api/v1/upload/voice    → 语音消息，返回 voice_url
-
-限制：
-- 图片最大 5MB，支持 jpg/png/webp
-- 视频最大 50MB，支持 mp4
-- 语音最大 10MB，支持 m4a/mp3
-- 上传接口需要 JWT 认证
-```
-
-### 快速参考补充
-
-| 需求 | 方案 |
-|------|------|
-| 本地对象存储 | MinIO Docker（端口9000/9001） |
-| 生产对象存储 | 阿里云 OSS（内网节点，免流量费） |
-| S3 客户端 | `aws-sdk-s3` crate，`force_path_style=true` |
-| 文件名生成 | `年/月/日/{uuid}.{ext}` 防冲突 |
-| 切换环境 | 只改 STORAGE_* 环境变量，代码零改动 |

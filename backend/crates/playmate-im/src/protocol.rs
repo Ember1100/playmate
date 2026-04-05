@@ -43,6 +43,13 @@ pub enum ServerMessage {
         message_id: Uuid,
         status: String,             // "delivered" | "failed"
     },
+    /// 新通知推送（由 playmate-common::notify::push_notification 触发）
+    NewNotification {
+        notification_id: Uuid,
+        ntype:   String,
+        title:   String,
+        content: Option<String>,
+    },
     /// 心跳响应
     Pong,
     /// 错误通知

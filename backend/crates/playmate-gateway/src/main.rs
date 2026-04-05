@@ -148,13 +148,25 @@ async fn main() -> anyhow::Result<()> {
     // ── 路由 ──────────────────────────────────────────────────────────────
     let app = Router::new()
         .route("/health", get(health))
-        .nest("/api/v1/auth",   playmate_user::auth_routes())
-        .nest("/api/v1/users",  playmate_user::user_routes())
-        .nest("/api/v1/tags",   playmate_user::tag_routes())
-        .nest("/api/v1/im",     playmate_im::im_routes())
-        .nest("/api/v1/feed",   playmate_feed::feed_routes())
-        .nest("/api/v1/match",  playmate_match::match_routes())
-        .nest("/api/v1/upload", upload::upload_routes())
+        // 用户认证与资料
+        .nest("/api/v1/auth",          playmate_user::auth_routes())
+        .nest("/api/v1/users",         playmate_user::user_routes())
+        .nest("/api/v1/tags",          playmate_user::tag_routes())
+        .nest("/api/v1/notifications", playmate_user::notification_routes())
+        .nest("/api/v1/feedback",      playmate_user::feedback_routes())
+        .nest("/api/v1/notes",         playmate_user::note_routes())
+        // 即时通讯
+        .nest("/api/v1/im",            playmate_im::im_routes())
+        // 圈子（话题/投票/社群）
+        .nest("/api/v1/topics",        playmate_circle::topic_routes())
+        .nest("/api/v1/polls",         playmate_circle::poll_routes())
+        .nest("/api/v1/circle",        playmate_circle::circle_routes())
+        // 集市
+        .nest("/api/v1/market",        playmate_market::market_routes())
+        // 搭子
+        .nest("/api/v1/buddy",         playmate_buddy::buddy_routes())
+        // 文件上传
+        .nest("/api/v1/upload",        upload::upload_routes())
         .with_state(state)
         .layer(cors)
         .layer(TraceLayer::new_for_http());

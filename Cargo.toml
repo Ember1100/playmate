@@ -4,15 +4,17 @@ members = [
     "backend/crates/playmate-gateway",
     "backend/crates/playmate-user",
     "backend/crates/playmate-im",
-    "backend/crates/playmate-match",
-    "backend/crates/playmate-feed",
+    "backend/crates/playmate-circle",
+    "backend/crates/playmate-market",
+    "backend/crates/playmate-buddy",
 ]
 resolver = "2"
 
 [workspace.dependencies]
 axum = { version = "0.7", features = ["ws", "multipart", "macros"] }
 tokio = { version = "1", features = ["full"] }
-sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono", "json", "migrate"] }
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono", "json", "migrate", "rust_decimal"] }
+rust_decimal = { version = "1", features = ["serde-with-str"] }
 redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace", "compression-gzip", "request-id"] }

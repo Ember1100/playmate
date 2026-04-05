@@ -6,6 +6,7 @@ pub mod config;
 pub mod db;
 pub mod error;
 pub mod hub;
+pub mod notify;
 pub mod response;
 pub mod state;
 pub mod storage;

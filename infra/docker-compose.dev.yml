@@ -72,10 +72,12 @@ services:
       /bin/sh -c "
         mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
         mc mb --ignore-existing local/avatars &&
-        mc mb --ignore-existing local/posts &&
+        mc mb --ignore-existing local/market &&
+        mc mb --ignore-existing local/topics &&
         mc mb --ignore-existing local/voices &&
         mc anonymous set download local/avatars &&
-        mc anonymous set download local/posts &&
+        mc anonymous set download local/market &&
+        mc anonymous set download local/topics &&
         mc anonymous set download local/voices &&
         echo 'MinIO buckets ready.'
       "

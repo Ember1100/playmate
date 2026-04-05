@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{model::{Conversation, Message}, repository::ConversationFull};
+use crate::{model::Message, repository::ConversationFull};
 
 // ── Requests ────────────────────────────────────────────────────────────────
 
@@ -29,72 +29,54 @@ fn default_limit() -> i64 { 20 }
 
 #[derive(Serialize)]
 pub struct ConversationResponse {
-    pub id: Uuid,
-    pub conv_type: i16,
-    pub created_at: DateTime<Utc>,
-    pub other_user_id: Option<Uuid>,
-    pub other_username: Option<String>,
+    pub id:               Uuid,
+    pub created_at:       DateTime<Utc>,
+    pub other_user_id:    Uuid,
+    pub other_username:   Option<String>,
     pub other_avatar_url: Option<String>,
-    pub last_message: Option<String>,
-    pub last_message_at: Option<DateTime<Utc>>,
-    pub unread_count: i64,
-}
-
-impl From<Conversation> for ConversationResponse {
-    fn from(c: Conversation) -> Self {
-        Self {
-            id: c.id,
-            conv_type: c.conv_type,
-            created_at: c.created_at,
-            other_user_id: None,
-            other_username: None,
-            other_avatar_url: None,
-            last_message: None,
-            last_message_at: None,
-            unread_count: 0,
-        }
-    }
+    pub last_message:     Option<String>,
+    pub last_message_at:  Option<DateTime<Utc>>,
+    pub unread_count:     i64,
 }
 
 impl From<ConversationFull> for ConversationResponse {
     fn from(c: ConversationFull) -> Self {
         Self {
-            id: c.id,
-            conv_type: c.conv_type,
-            created_at: c.created_at,
-            other_user_id: c.other_user_id,
-            other_username: c.other_username,
+            id:               c.id,
+            created_at:       c.created_at,
+            other_user_id:    c.other_user_id,
+            other_username:   c.other_username,
             other_avatar_url: c.other_avatar_url,
-            last_message: c.last_message,
-            last_message_at: c.last_message_at,
-            unread_count: c.unread_count,
+            last_message:     c.last_message,
+            last_message_at:  c.last_message_at,
+            unread_count:     c.unread_count,
         }
     }
 }
 
 #[derive(Serialize)]
 pub struct MessageResponse {
-    pub id: Uuid,
+    pub id:              Uuid,
     pub conversation_id: Uuid,
-    pub sender_id: Uuid,
-    pub msg_type: i16,
-    pub content: Option<String>,
-    pub media_url: Option<String>,
-    pub is_recalled: bool,
-    pub created_at: DateTime<Utc>,
+    pub sender_id:       Uuid,
+    pub msg_type:        i16,
+    pub content:         Option<String>,
+    pub media_url:       Option<String>,
+    pub is_recalled:     bool,
+    pub created_at:      DateTime<Utc>,
 }
 
 impl From<Message> for MessageResponse {
     fn from(m: Message) -> Self {
         Self {
-            id: m.id,
+            id:              m.id,
             conversation_id: m.conversation_id,
-            sender_id: m.sender_id,
-            msg_type: m.msg_type,
-            content: m.content,
-            media_url: m.media_url,
-            is_recalled: m.is_recalled,
-            created_at: m.created_at,
+            sender_id:       m.sender_id,
+            msg_type:        m.msg_type,
+            content:         m.content,
+            media_url:       m.media_url,
+            is_recalled:     m.is_recalled,
+            created_at:      m.created_at,
         }
     }
 }
