@@ -47,6 +47,8 @@ jobs:
       - name: Build release binary
         env:
           SQLX_OFFLINE: "true"
+          # aws-sdk-s3 用 Ring 做 TLS，musl 下需要关闭 LTO 避免链接失败
+          CARGO_PROFILE_RELEASE_LTO: "false"
         run: |
           cargo build --release --bin playmate-gateway \
             --target x86_64-unknown-linux-musl
