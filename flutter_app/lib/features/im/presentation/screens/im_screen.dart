@@ -108,6 +108,7 @@ class ImScreen extends ConsumerWidget {
                       extra: {
                         'username': conv.otherUsername,
                         'otherUserId': conv.otherUserId,
+                        'otherAvatarUrl': conv.otherAvatarUrl,
                       },
                     );
                   },

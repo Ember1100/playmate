@@ -57,6 +57,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                           state.pathParameters['conversationId']!,
                       otherUsername:
                           extra?['username'] as String? ?? '聊天',
+                      otherAvatarUrl:
+                          extra?['otherAvatarUrl'] as String?,
                     );
                   },
                 ),

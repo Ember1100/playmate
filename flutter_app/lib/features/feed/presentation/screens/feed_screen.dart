@@ -179,6 +179,88 @@ class _PostCard extends StatefulWidget {
 class _PostCardState extends State<_PostCard> {
   bool _expanded = false;
 
+  void _showImagePreview(BuildContext context, List<String> urls, int initial) {
+    final controller = PageController(initialPage: initial);
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (_) => GestureDetector(
+        onTap: () => Navigator.of(context).pop(),
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Stack(
+            children: [
+              PageView.builder(
+                controller: controller,
+                itemCount: urls.length,
+                itemBuilder: (ctx, index) => InteractiveViewer(
+                  child: Center(
+                    child: Image.network(
+                      urls[index],
+                      fit: BoxFit.contain,
+                      errorBuilder: (ctx, _, __) => const Icon(
+                        Icons.broken_image,
+                        color: Colors.white54,
+                        size: 64,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (urls.length > 1)
+                Positioned(
+                  bottom: 32,
+                  left: 0,
+                  right: 0,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      urls.length,
+                      (i) => AnimatedBuilder(
+                        animation: controller,
+                        builder: (_, __) {
+                          final page = controller.hasClients
+                              ? (controller.page?.round() ?? initial)
+                              : initial;
+                          return Container(
+                            width: 6,
+                            height: 6,
+                            margin: const EdgeInsets.symmetric(horizontal: 3),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: page == i
+                                  ? Colors.white
+                                  : Colors.white38,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              Positioned(
+                top: 48,
+                right: 16,
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: const BoxDecoration(
+                      color: Colors.black45,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, color: Colors.white, size: 18),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final post = widget.post;
@@ -278,19 +360,22 @@ class _PostCardState extends State<_PostCard> {
                 itemCount: post.mediaUrls.length,
                 separatorBuilder: (context, index) => const SizedBox(width: 8),
                 itemBuilder: (context, index) {
-                  return ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      post.mediaUrls[index],
-                      height: 180,
-                      width: 180,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        width: 180,
+                  return GestureDetector(
+                    onTap: () => _showImagePreview(context, post.mediaUrls, index),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        post.mediaUrls[index],
                         height: 180,
-                        color: AppColors.background,
-                        child: const Icon(Icons.broken_image,
-                            color: AppColors.textSecondary),
+                        width: 180,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          width: 180,
+                          height: 180,
+                          color: AppColors.background,
+                          child: const Icon(Icons.broken_image,
+                              color: AppColors.textSecondary),
+                        ),
                       ),
                     ),
                   );

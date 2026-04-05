@@ -18,10 +18,12 @@ class ChatScreen extends ConsumerStatefulWidget {
     super.key,
     required this.conversationId,
     required this.otherUsername,
+    this.otherAvatarUrl,
   });
 
   final String conversationId;
   final String otherUsername;
+  final String? otherAvatarUrl;
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -284,6 +286,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     return _MessageBubble(
                       message: msg,
                       isMe: isMe,
+                      otherAvatarUrl: widget.otherAvatarUrl,
                     );
                   },
                 );
@@ -380,10 +383,12 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
     required this.isMe,
+    this.otherAvatarUrl,
   });
 
   final Message message;
   final bool isMe;
+  final String? otherAvatarUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -404,9 +409,13 @@ class _MessageBubble extends StatelessWidget {
                 CircleAvatar(
                   radius: 16,
                   backgroundColor: AppColors.secondary,
-                  child: const Text('?',
-                      style:
-                          TextStyle(color: Colors.white, fontSize: 12)),
+                  backgroundImage: otherAvatarUrl != null
+                      ? NetworkImage(otherAvatarUrl!)
+                      : null,
+                  child: otherAvatarUrl == null
+                      ? const Text('?',
+                          style: TextStyle(color: Colors.white, fontSize: 12))
+                      : null,
                 ),
                 const SizedBox(width: 8),
               ],
