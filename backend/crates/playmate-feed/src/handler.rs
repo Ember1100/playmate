@@ -114,3 +114,61 @@ pub async fn toggle_like(
     let (liked, like_count) = repository::toggle_like(&state.db, post_id, current_user.id).await?;
     Ok(ApiResponse::ok(LikeResponse { liked, like_count }))
 }
+
+/// 获取当前用户点赞的帖子
+pub async fn list_liked_posts(
+    State(state): State<AppState>,
+    Query(q): Query<FeedQuery>,
+    current_user: CurrentUser,
+) -> Result<impl IntoResponse, AppError> {
+    let limit = q.limit.clamp(1, 50);
+    let offset = (q.page - 1) * limit;
+    let total = repository::count_liked_posts(&state.db, current_user.id).await?;
+    let posts = repository::list_liked_posts_with_user(&state.db, current_user.id, limit, offset).await?;
+    let items: Vec<crate::dto::PostResponse> = posts.into_iter().map(Into::into).collect();
+    Ok(ApiResponse::ok(PageResponse {
+        has_more: offset + limit < total,
+        total,
+        page: q.page,
+        limit,
+        items,
+    }))
+}
+
+/// 获取帖子评论列表
+pub async fn list_comments(
+    State(state): State<AppState>,
+    Path(post_id): Path<Uuid>,
+    Query(q): Query<FeedQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    let limit = q.limit.clamp(1, 50);
+    let offset = (q.page - 1) * limit;
+    let total = repository::count_comments(&state.db, post_id).await?;
+    let comments = repository::list_comments(&state.db, post_id, limit, offset).await?;
+    let items: Vec<crate::dto::CommentResponse> = comments.into_iter().map(Into::into).collect();
+    Ok(ApiResponse::ok(PageResponse {
+        has_more: offset + limit < total,
+        total,
+        page: q.page,
+        limit,
+        items,
+    }))
+}
+
+/// 发表评论
+pub async fn create_comment(
+    State(state): State<AppState>,
+    current_user: CurrentUser,
+    Path(post_id): Path<Uuid>,
+    Json(payload): Json<crate::dto::CreateCommentRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    payload.validate().map_err(|e| AppError::BadRequest(e.to_string()))?;
+    let (id, created_at) = repository::create_comment(&state.db, post_id, current_user.id, &payload.content).await?;
+    Ok((StatusCode::CREATED, ApiResponse::ok(serde_json::json!({
+        "id": id,
+        "post_id": post_id,
+        "user_id": current_user.id,
+        "content": payload.content,
+        "created_at": created_at,
+    }))))
+}

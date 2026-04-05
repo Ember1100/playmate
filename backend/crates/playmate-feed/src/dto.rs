@@ -92,3 +92,34 @@ pub struct LikeResponse {
     pub liked: bool,
     pub like_count: i32,
 }
+
+#[derive(Deserialize, Validate)]
+pub struct CreateCommentRequest {
+    #[validate(length(min = 1, max = 500, message = "评论内容 1-500 字"))]
+    pub content: String,
+}
+
+#[derive(Serialize)]
+pub struct CommentResponse {
+    pub id: Uuid,
+    pub post_id: Uuid,
+    pub user_id: Uuid,
+    pub username: String,
+    pub avatar_url: Option<String>,
+    pub content: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<crate::repository::CommentWithUser> for CommentResponse {
+    fn from(c: crate::repository::CommentWithUser) -> Self {
+        Self {
+            id: c.id,
+            post_id: c.post_id,
+            user_id: c.user_id,
+            username: c.username,
+            avatar_url: c.avatar_url,
+            content: c.content,
+            created_at: c.created_at,
+        }
+    }
+}

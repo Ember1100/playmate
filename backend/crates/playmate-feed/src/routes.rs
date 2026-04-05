@@ -12,6 +12,8 @@ use crate::handler;
 pub fn feed_routes() -> Router<AppState> {
     Router::new()
         .route("/posts", get(handler::list_posts).post(handler::create_post))
+        .route("/posts/liked", get(handler::list_liked_posts))
         .route("/posts/:id", get(handler::get_post).delete(handler::delete_post))
         .route("/posts/:id/like", post(handler::toggle_like))
+        .route("/posts/:id/comments", get(handler::list_comments).post(handler::create_comment))
 }
