@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/api/api_client.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../features/auth/providers/auth_provider.dart';
+import '../../../auth/providers/auth_provider.dart';
 import '../../data/im_model.dart';
 import '../../data/websocket_service.dart';
 import '../../providers/im_provider.dart';
@@ -28,7 +28,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   StreamSubscription<Map<String, dynamic>>? _wsSub;
-  bool _isSending = false;
 
   @override
   void initState() {
@@ -91,36 +90,41 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
-    if (text.isEmpty || _isSending) return;
+    if (text.isEmpty) return;
 
-    // Send via WebSocket
     final wsService = ref.read(wsServiceProvider);
-    if (wsService.isConnected) {
-      wsService.sendMessage({
-        'type': 'send_message',
-        'conversation_id': widget.conversationId,
-        'msg_type': 1,
-        'content': text,
-      });
+    if (!wsService.isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('连接中，请稍后重试')),
+      );
+      return;
     }
 
     _textController.clear();
-    setState(() => _isSending = true);
 
-    try {
-      await ref
-          .read(chatNotifierProvider(widget.conversationId).notifier)
-          .sendMessage(text);
-      _scrollToBottom();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('发送失败，请重试')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSending = false);
-    }
+    // 本地乐观显示
+    final currentUser = ref.read(currentUserProvider);
+    final tempMsg = Message(
+      id: 'temp_${DateTime.now().millisecondsSinceEpoch}',
+      conversationId: widget.conversationId,
+      senderId: currentUser?.id ?? 'me',
+      type: 1,
+      content: text,
+      createdAt: DateTime.now(),
+      isRecalled: false,
+    );
+    ref
+        .read(chatNotifierProvider(widget.conversationId).notifier)
+        .addMessage(tempMsg);
+    _scrollToBottom();
+
+    // 通过 WebSocket 发送（服务端存库 + 推送对方）
+    wsService.sendMessage({
+      'type': 'send_message',
+      'conversation_id': widget.conversationId,
+      'msg_type': 1,
+      'content': text,
+    });
   }
 
   @override
