@@ -124,12 +124,12 @@ class FeedScreen extends ConsumerWidget {
                         onChat: currentUser?.id != post.userId
                             ? () async {
                                 try {
-                                  final conv = await ref
+                                  final convId = await ref
                                       .read(imRepositoryProvider)
                                       .createConversation(post.userId);
                                   if (context.mounted) {
                                     context.push(
-                                      '/im/${conv.id}',
+                                      '/im/$convId',
                                       extra: {'username': post.username},
                                     );
                                   }

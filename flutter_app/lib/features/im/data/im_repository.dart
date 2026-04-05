@@ -38,12 +38,13 @@ class ImRepository {
     return Message.fromJson(resp['data'] as Map<String, dynamic>);
   }
 
-  Future<Conversation> createConversation(String userId) async {
+  Future<String> createConversation(String userId) async {
     final resp = await _client.post<Map<String, dynamic>>(
       '/im/conversations',
-      data: {'user_id': userId},
+      data: {'target_user_id': userId},
     );
-    return Conversation.fromJson(resp['data'] as Map<String, dynamic>);
+    final data = resp['data'] as Map<String, dynamic>;
+    return data['id'] as String;
   }
 }
 

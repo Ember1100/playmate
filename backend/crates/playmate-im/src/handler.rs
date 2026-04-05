@@ -35,7 +35,7 @@ pub async fn list_conversations(
     State(state): State<AppState>,
     current_user: CurrentUser,
 ) -> Result<impl IntoResponse, AppError> {
-    let convs = repository::list_conversations(&state.db, current_user.id).await?;
+    let convs = repository::list_conversations_full(&state.db, current_user.id).await?;
     let items: Vec<ConversationResponse> = convs.into_iter().map(Into::into).collect();
     Ok(ApiResponse::ok(items))
 }
@@ -53,23 +53,23 @@ pub async fn create_conversation(
         return Err(AppError::BadRequest("不能和自己创建会话".to_string()));
     }
 
-    // 如果已有私聊会话则复用
-    if let Some(conv_id) =
+    // 如果已有私聊会话则复用，否则新建
+    let conv_id = if let Some(id) =
         repository::find_private_conversation(&state.db, current_user.id, payload.target_user_id)
             .await?
     {
-        let convs = repository::list_conversations(&state.db, current_user.id).await?;
-        let conv = convs
-            .into_iter()
-            .find(|c| c.id == conv_id)
-            .ok_or_else(|| AppError::Internal(anyhow::anyhow!("会话不一致")))?;
-        return Ok(ApiResponse::ok(ConversationResponse::from(conv)));
-    }
+        id
+    } else {
+        let conv = repository::create_private_conversation(
+            &state.db,
+            current_user.id,
+            payload.target_user_id,
+        )
+        .await?;
+        conv.id
+    };
 
-    let conv =
-        repository::create_private_conversation(&state.db, current_user.id, payload.target_user_id)
-            .await?;
-    Ok(ApiResponse::ok(ConversationResponse::from(conv)))
+    Ok(ApiResponse::ok(serde_json::json!({ "id": conv_id })))
 }
 
 /// 获取会话消息（分页，最新在前）

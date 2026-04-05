@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::model::{Conversation, Message};
+use crate::{model::{Conversation, Message}, repository::ConversationFull};
 
 // ── Requests ────────────────────────────────────────────────────────────────
 
@@ -32,6 +32,12 @@ pub struct ConversationResponse {
     pub id: Uuid,
     pub conv_type: i16,
     pub created_at: DateTime<Utc>,
+    pub other_user_id: Option<Uuid>,
+    pub other_username: Option<String>,
+    pub other_avatar_url: Option<String>,
+    pub last_message: Option<String>,
+    pub last_message_at: Option<DateTime<Utc>>,
+    pub unread_count: i64,
 }
 
 impl From<Conversation> for ConversationResponse {
@@ -40,6 +46,28 @@ impl From<Conversation> for ConversationResponse {
             id: c.id,
             conv_type: c.conv_type,
             created_at: c.created_at,
+            other_user_id: None,
+            other_username: None,
+            other_avatar_url: None,
+            last_message: None,
+            last_message_at: None,
+            unread_count: 0,
+        }
+    }
+}
+
+impl From<ConversationFull> for ConversationResponse {
+    fn from(c: ConversationFull) -> Self {
+        Self {
+            id: c.id,
+            conv_type: c.conv_type,
+            created_at: c.created_at,
+            other_user_id: c.other_user_id,
+            other_username: c.other_username,
+            other_avatar_url: c.other_avatar_url,
+            last_message: c.last_message,
+            last_message_at: c.last_message_at,
+            unread_count: c.unread_count,
         }
     }
 }

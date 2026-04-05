@@ -70,6 +70,130 @@ pub async fn list_conversations(pool: &PgPool, user_id: Uuid) -> AppResult<Vec<C
     .map_err(AppError::Database)
 }
 
+pub struct ConversationFull {
+    pub id: Uuid,
+    pub conv_type: i16,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub other_user_id: Option<Uuid>,
+    pub other_username: Option<String>,
+    pub other_avatar_url: Option<String>,
+    pub last_message: Option<String>,
+    pub last_message_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub unread_count: i64,
+}
+
+/// 列出用户参与的所有会话（含对方用户信息、最新消息、未读数）
+pub async fn list_conversations_full(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> AppResult<Vec<ConversationFull>> {
+    // Step 1: 获取会话列表
+    let convs = sqlx::query_as::<_, Conversation>(
+        "SELECT c.id, c.type, c.created_at
+         FROM conversations c
+         JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
+         ORDER BY c.created_at DESC",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    if convs.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let conv_ids: Vec<Uuid> = convs.iter().map(|c| c.id).collect();
+
+    // Step 2: 批量获取各会话中"对方"的 user_id
+    let other_members: Vec<(Uuid, Uuid)> = sqlx::query_as(
+        "SELECT conversation_id, user_id FROM conversation_members
+         WHERE conversation_id = ANY($1) AND user_id != $2",
+    )
+    .bind(&conv_ids)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    // conv_id → other_user_id
+    let other_map: std::collections::HashMap<Uuid, Uuid> = other_members
+        .into_iter()
+        .collect();
+
+    // Step 3: 批量获取对方用户信息
+    let other_user_ids: Vec<Uuid> = other_map.values().copied().collect::<std::collections::HashSet<_>>().into_iter().collect();
+    let users: Vec<(Uuid, String, Option<String>)> = if other_user_ids.is_empty() {
+        vec![]
+    } else {
+        sqlx::query_as("SELECT id, username, avatar_url FROM users WHERE id = ANY($1)")
+            .bind(&other_user_ids)
+            .fetch_all(pool)
+            .await
+            .map_err(AppError::Database)?
+    };
+    let user_map: std::collections::HashMap<Uuid, (String, Option<String>)> = users
+        .into_iter()
+        .map(|(id, u, a)| (id, (u, a)))
+        .collect();
+
+    // Step 4: 每个会话的最新消息 + 未读数（用 LATERAL 一次搞定）
+    type LastMsgRow = (Uuid, Option<String>, Option<chrono::DateTime<chrono::Utc>>, i64);
+    let last_msgs: Vec<LastMsgRow> = sqlx::query_as(
+        "SELECT c_id, last_content, last_at, unread_cnt FROM (
+             SELECT
+                 m.conversation_id AS c_id,
+                 (SELECT content FROM messages WHERE conversation_id = m.conversation_id ORDER BY created_at DESC LIMIT 1) AS last_content,
+                 (SELECT created_at FROM messages WHERE conversation_id = m.conversation_id ORDER BY created_at DESC LIMIT 1) AS last_at,
+                 COUNT(*) FILTER (WHERE m.created_at > COALESCE(cm.last_read_at, '1970-01-01') AND m.sender_id != $2) AS unread_cnt
+             FROM messages m
+             JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = $2
+             WHERE m.conversation_id = ANY($1)
+             GROUP BY m.conversation_id
+         ) sub",
+    )
+    .bind(&conv_ids)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    let msg_map: std::collections::HashMap<Uuid, (Option<String>, Option<chrono::DateTime<chrono::Utc>>, i64)> = last_msgs
+        .into_iter()
+        .map(|(cid, content, at, unread)| (cid, (content, at, unread)))
+        .collect();
+
+    // Step 5: 组装结果
+    let result = convs
+        .into_iter()
+        .map(|c| {
+            let other_uid = other_map.get(&c.id).copied();
+            let (other_username, other_avatar_url) = other_uid
+                .and_then(|uid| user_map.get(&uid).cloned())
+                .map(|(u, a)| (Some(u), a))
+                .unwrap_or((None, None));
+            let (last_message, last_message_at, unread_count) = msg_map
+                .get(&c.id)
+                .cloned()
+                .map(|(m, at, u)| (m, at, u))
+                .unwrap_or((None, None, 0));
+            ConversationFull {
+                id: c.id,
+                conv_type: c.conv_type,
+                created_at: c.created_at,
+                other_user_id: other_uid,
+                other_username,
+                other_avatar_url,
+                last_message,
+                last_message_at,
+                unread_count,
+            }
+        })
+        .collect();
+
+    Ok(result)
+}
+
 /// 检查用户是否是会话成员
 pub async fn is_member(pool: &PgPool, conversation_id: Uuid, user_id: Uuid) -> AppResult<bool> {
     let row: (bool,) = sqlx::query_as(
