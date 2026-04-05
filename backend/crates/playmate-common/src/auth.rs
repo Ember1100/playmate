@@ -95,6 +95,17 @@ fn extract_bearer(headers: &HeaderMap) -> Option<String> {
     value.strip_prefix("Bearer ").map(|s| s.to_string())
 }
 
+/// WebSocket 握手无法携带自定义 header，从 ?token= 查询参数提取
+fn extract_query_token(parts: &Parts) -> Option<String> {
+    let query = parts.uri.query()?;
+    for pair in query.split('&') {
+        if let Some(val) = pair.strip_prefix("token=") {
+            return Some(val.to_string());
+        }
+    }
+    None
+}
+
 #[async_trait]
 impl FromRequestParts<AppState> for CurrentUser {
     type Rejection = AppError;
@@ -103,8 +114,10 @@ impl FromRequestParts<AppState> for CurrentUser {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
+        // 优先从 Authorization header 读取，WebSocket 升级时 fallback 到 ?token=
         let token = extract_bearer(&parts.headers)
-            .ok_or_else(|| AppError::Unauthorized("缺少 Authorization header".to_string()))?;
+            .or_else(|| extract_query_token(parts))
+            .ok_or_else(|| AppError::Unauthorized("缺少认证信息".to_string()))?;
 
         let claims = verify_token(&token, &state.config.jwt_secret)?;
 
