@@ -287,6 +287,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       message: msg,
                       isMe: isMe,
                       otherAvatarUrl: widget.otherAvatarUrl,
+                      otherUsername: widget.otherUsername,
                     );
                   },
                 );
@@ -383,11 +384,13 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
     required this.isMe,
+    required this.otherUsername,
     this.otherAvatarUrl,
   });
 
   final Message message;
   final bool isMe;
+  final String otherUsername;
   final String? otherAvatarUrl;
 
   @override
@@ -413,8 +416,10 @@ class _MessageBubble extends StatelessWidget {
                       ? NetworkImage(otherAvatarUrl!)
                       : null,
                   child: otherAvatarUrl == null
-                      ? const Text('?',
-                          style: TextStyle(color: Colors.white, fontSize: 12))
+                      ? Text(
+                          otherUsername.substring(0, 1).toUpperCase(),
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                        )
                       : null,
                 ),
                 const SizedBox(width: 8),
