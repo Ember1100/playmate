@@ -115,6 +115,45 @@ pub async fn login_with_wechat(state: &AppState, wx_code: &str) -> AppResult<Aut
     })
 }
 
+// ── 开发环境快速登录（DEV_MODE=true）────────────────────────────────────────
+
+/// 免短信验证码登录/注册（仅开发用）
+/// 调用前必须先检查 DEV_MODE，此函数不做环境校验
+pub async fn dev_login(
+    state:    &AppState,
+    phone:    &str,
+    username: Option<&str>,
+) -> AppResult<AuthResponse> {
+    let user = match user_repo::find_by_phone(&state.db, phone).await? {
+        Some(u) => u,
+        None => {
+            let name = if let Some(u) = username {
+                u.to_string()
+            } else {
+                loop {
+                    let name = random_username();
+                    if !user_repo::username_exists(&state.db, &name).await? {
+                        break name;
+                    }
+                }
+            };
+            user_repo::create_user_with_phone(&state.db, &name, phone).await?
+        }
+    };
+
+    let is_new = user.is_new_user;
+    let pair   = token_service::create_token_pair(user.id, &user.username, &state.config)?;
+
+    Ok(AuthResponse {
+        access_token:  pair.access_token,
+        refresh_token: pair.refresh_token,
+        token_type:    "Bearer".to_string(),
+        expires_in:    token_service::expires_in(),
+        is_new_user:   is_new,
+        user:          user.into(),
+    })
+}
+
 // ── Token 刷新 ───────────────────────────────────────────────────────────────
 
 pub async fn refresh_token(

@@ -14,7 +14,7 @@ use validator::Validate;
 use playmate_common::{error::AppError, response::ApiResponse, AppState, CurrentUser};
 
 use crate::{
-    model::auth::{RefreshRequest, SmsCodeRequest, SmsVerifyRequest, WechatLoginRequest},
+    model::auth::{DevLoginRequest, RefreshRequest, SmsCodeRequest, SmsVerifyRequest, WechatLoginRequest},
     repo::user_repo,
     service::{auth_service, sms_service},
 };
@@ -63,6 +63,29 @@ pub async fn refresh(
 /// 登出（JWT 无状态，客户端丢弃 Token 即可）
 pub async fn logout(_current_user: CurrentUser) -> Result<impl IntoResponse, AppError> {
     Ok(ApiResponse::ok_empty())
+}
+
+/// 开发环境快速登录（DEV_MODE=true 时生效，否则返回 404）
+///
+/// ```
+/// POST /api/v1/auth/dev/login
+/// { "phone": "13800138000", "username": "testuser" }
+/// ```
+pub async fn dev_login(
+    State(state): State<AppState>,
+    Json(payload): Json<DevLoginRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let dev_mode = std::env::var("DEV_MODE").unwrap_or_default();
+    if dev_mode != "true" {
+        return Err(AppError::NotFound("接口不存在".to_string()));
+    }
+    let resp = auth_service::dev_login(
+        &state,
+        &payload.phone,
+        payload.username.as_deref(),
+    )
+    .await?;
+    Ok(ApiResponse::ok(resp))
 }
 
 /// 账号注销（软删除，清除手机号）

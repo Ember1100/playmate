@@ -9,6 +9,15 @@ use crate::model::user::{CareerProfile, User, UserStats};
 
 // ── Auth Requests ────────────────────────────────────────────────────────────
 
+/// 开发环境专用：免短信验证码直接登录 / 注册
+/// 仅在环境变量 DEV_MODE=true 时生效
+#[derive(Deserialize)]
+pub struct DevLoginRequest {
+    #[serde(default)]
+    pub username: Option<String>,
+    pub phone:    String,
+}
+
 #[derive(Deserialize, Validate)]
 pub struct SmsCodeRequest {
     #[validate(length(min = 11, max = 11, message = "手机号格式不正确"))]

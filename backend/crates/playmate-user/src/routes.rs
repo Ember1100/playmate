@@ -18,6 +18,8 @@ pub fn auth_routes() -> Router<AppState> {
         .route("/refresh",      post(auth::refresh))
         .route("/logout",       post(auth::logout))
         .route("/account",      delete(auth::delete_account))
+        // 开发环境专用（DEV_MODE=true 时有效，否则返回 404）
+        .route("/dev/login",    post(auth::dev_login))
 }
 
 /// 用户 Profile 路由（需要 JWT，由 CurrentUser 提取器自动校验）
