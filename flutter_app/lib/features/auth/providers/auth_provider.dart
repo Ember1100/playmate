@@ -69,3 +69,37 @@ class AuthNotifier extends AsyncNotifier<void> {
 
 final authNotifierProvider =
     AsyncNotifierProvider<AuthNotifier, void>(AuthNotifier.new);
+
+// 问卷提交 Notifier
+class QuestionnaireNotifier extends AsyncNotifier<void> {
+  @override
+  Future<void> build() async {}
+
+  Future<void> submit({
+    required String identity,
+    required String city,
+    required String ageRange,
+    required List<int> interests,
+    required List<int> purposes,
+  }) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await ref.read(authRepositoryProvider).submitQuestionnaire(
+            identity:  identity,
+            city:      city,
+            ageRange:  ageRange,
+            interests: interests,
+            purposes:  purposes,
+          );
+      // 更新本地用户状态，触发路由跳转回首页
+      final user = ref.read(currentUserProvider);
+      if (user != null) {
+        ref.read(currentUserProvider.notifier).state =
+            user.copyWith(isNewUser: false);
+      }
+    });
+  }
+}
+
+final questionnaireNotifierProvider =
+    AsyncNotifierProvider<QuestionnaireNotifier, void>(QuestionnaireNotifier.new);

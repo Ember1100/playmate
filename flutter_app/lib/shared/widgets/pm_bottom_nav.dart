@@ -4,19 +4,19 @@ import '../../app/theme.dart';
 
 /// 底部导航 Shell（固定高度 98px + 安全区域）
 ///
-/// Tab 顺序（来自设计规范）：
-///   0 搭子 | 1 趣玩 | 2 圈子 | 3 集市 | 4 我的
+/// Tab 顺序（来自 UI 设计稿）：
+///   0 圈子 | 1 集市 | 2 搭子 | 3 趣玩 | 4 我的
 class PmBottomNav extends StatelessWidget {
   const PmBottomNav({super.key, required this.shell});
 
   final StatefulNavigationShell shell;
 
   static const _tabs = [
-    _TabItem(icon: Icons.people_alt_outlined,   activeIcon: Icons.people_alt_rounded,    label: '搭子'),
-    _TabItem(icon: Icons.celebration_outlined,  activeIcon: Icons.celebration_rounded,   label: '趣玩'),
-    _TabItem(icon: Icons.forum_outlined,        activeIcon: Icons.forum_rounded,         label: '圈子'),
-    _TabItem(icon: Icons.storefront_outlined,   activeIcon: Icons.storefront_rounded,    label: '集市'),
-    _TabItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded,       label: '我的'),
+    _TabItem(icon: Icons.forum_outlined,         activeIcon: Icons.forum_rounded,         label: '圈子'),
+    _TabItem(icon: Icons.storefront_outlined,    activeIcon: Icons.storefront_rounded,    label: '集市'),
+    _TabItem(icon: Icons.people_alt_outlined,    activeIcon: Icons.people_alt_rounded,    label: '搭子'),
+    _TabItem(icon: Icons.celebration_outlined,   activeIcon: Icons.celebration_rounded,   label: '趣玩'),
+    _TabItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded,        label: '我的'),
   ];
 
   void _onTap(int index) {
@@ -37,9 +37,9 @@ class PmBottomNav extends StatelessWidget {
     return Container(
       height: 98 + bottomPadding,
       decoration: const BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.background,
         border: Border(
-          top: BorderSide(color: AppColors.border, width: 0.5),
+          top: BorderSide(color: AppColors.border, width: 1.0),
         ),
       ),
       child: Padding(
@@ -60,7 +60,7 @@ class PmBottomNav extends StatelessWidget {
     final color    = selected ? AppColors.primary : AppColors.textSecondary;
 
     return InkWell(
-      onTap:      () => _onTap(index),
+      onTap:       () => _onTap(index),
       splashColor: AppColors.primaryLight,
       child: SizedBox(
         height: 98,
@@ -72,7 +72,7 @@ class PmBottomNav extends StatelessWidget {
             Text(
               tab.label,
               style: TextStyle(
-                fontSize:   11,
+                fontSize:   11.5,
                 color:      color,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
               ),

@@ -118,8 +118,8 @@ async fn handle_socket(socket: WebSocket, state: AppState, user: CurrentUser) {
     // 有界 channel：防止客户端拉取过慢时内存无限增长
     let (tx, mut rx) = mpsc::channel::<String>(512);
 
-    // 注册到 Hub
-    state.hub.register(user.id, tx);
+    // 注册到 Hub，保存 conn_id 用于精准注销（多端登录时不影响其他连接）
+    let conn_id = state.hub.register(user.id, tx);
 
     // 更新在线状态
     let _ = playmate_common::cache::set_online(&state, user.id).await;
@@ -157,9 +157,11 @@ async fn handle_socket(socket: WebSocket, state: AppState, user: CurrentUser) {
         }
     }
 
-    // 清理
-    state.hub.unregister(&user.id);
-    let _ = playmate_common::cache::set_offline(&state, user.id).await;
+    // 只注销本连接；若用户还有其他端在线则保留在线状态
+    state.hub.unregister(&user.id, &conn_id);
+    if !state.hub.is_connected(&user.id) {
+        let _ = playmate_common::cache::set_offline(&state, user.id).await;
+    }
     send_task.abort();
 }
 

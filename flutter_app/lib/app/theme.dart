@@ -1,27 +1,49 @@
 import 'package:flutter/material.dart';
 
+/// 仅做淡入淡出，不跟手，不支持手势拖拽返回。
+/// 配合各页面内的 [GestureDetector] 实现"松手才返回"效果。
+class _FadePageTransitionsBuilder extends PageTransitionsBuilder {
+  const _FadePageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return FadeTransition(
+      opacity: CurvedAnimation(parent: animation, curve: Curves.easeIn),
+      child: child,
+    );
+  }
+}
+
 /// 全局颜色常量（来自设计规范）
 class AppColors {
   AppColors._();
 
   // 主色
-  static const primary       = Color(0xFFFF7A00); // 活力橙
-  static const primaryLight  = Color(0xFFFFF0E0);
+  static const primary       = Color(0xFFFFB703); // 暖琥珀黄
+  static const primaryLight  = Color(0xFFFFE8C0); // 浅暖黄
 
   // 辅色
   static const secondary     = Color(0xFF5DCAA5); // 绿
   static const accent        = Color(0xFFE24B4A); // 红/强调
 
   // 文字
-  static const textPrimary   = Color(0xFF1A1A2E);
-  static const textSecondary = Color(0xFF8A8A9A);
+  static const textPrimary   = Color(0xFF222222);
+  static const textSecondary = Color(0xFF999999);
+  static const textMedium    = Color(0xFF666666);
 
   // 背景
-  static const background    = Color(0xFFFFF8EC); // 暖米黄（页面底色）
+  static const background    = Color(0xFFFFF9EF); // 极浅暖黄（页面底色）
   static const surface       = Color(0xFFFFFFFF);
+  static const warmBg        = Color(0xFFFFE8C0); // 我的页面背景
 
   // 分割线 / 边框
-  static const border        = Color(0xFFEEEEF5);
+  static const border        = Color(0xFFFFE0B2); // 暖橙边框
 
   // 功能色
   static const error         = Color(0xFFE24B4A);
@@ -50,6 +72,14 @@ class AppTheme {
           error:     AppColors.error,
         ),
         scaffoldBackgroundColor: AppColors.background,
+
+        // 全平台用淡入淡出转场，去掉 iOS CupertinoPage 跟手拖拽行为
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: _FadePageTransitionsBuilder(),
+            TargetPlatform.iOS:     _FadePageTransitionsBuilder(),
+          },
+        ),
 
         // AppBar
         appBarTheme: const AppBarTheme(

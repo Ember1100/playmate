@@ -1,192 +1,332 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import '../../../../app/theme.dart';
 
-/// 集市 Tab 首页（4个子模块入口）
+/// 集市 Tab 首页（4个子模块）
 class MarketScreen extends StatelessWidget {
   const MarketScreen({super.key});
 
-  static const _modules = [
-    _Module(
-      icon:        Icons.find_in_page_outlined,
-      activeIcon:  Icons.find_in_page_rounded,
-      label:       '失物招领',
-      description: '发布/寻找丢失物品',
-      color:       Color(0xFFFF7A00),
-      path:        '/market/lost-found',
-    ),
-    _Module(
-      icon:        Icons.sell_outlined,
-      activeIcon:  Icons.sell_rounded,
-      label:       '二手闲置',
-      description: '出售/购买闲置好物',
-      color:       Color(0xFF5DCAA5),
-      path:        '/market/second-hand',
-    ),
-    _Module(
-      icon:        Icons.work_outline_rounded,
-      activeIcon:  Icons.work_rounded,
-      label:       '兼职啦',
-      description: '发布/寻找兼职机会',
-      color:       Color(0xFF5B8EF4),
-      path:        '/market/part-time',
-    ),
-    _Module(
-      icon:        Icons.swap_horiz_rounded,
-      activeIcon:  Icons.swap_horiz_rounded,
-      label:       '以物换物',
-      description: '用闲置换你所需',
-      color:       Color(0xFFE24B4A),
-      path:        '/market/barter',
-    ),
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 4,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFFE8C0),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildTopTabBar(),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _LostFoundTab(),
+                    const _ComingSoonTab(label: '二手闲置'),
+                    const _ComingSoonTab(label: '兼职啦'),
+                    const _ComingSoonTab(label: '以物换物'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopTabBar() {
+    return Container(
+      color: const Color(0xFFF7F7F8),
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFEEEEEE), width: 1),
+        ),
+      ),
+      child: TabBar(
+        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+        labelColor: const Color(0xFF222222),
+        unselectedLabelColor: const Color(0xFF888888),
+        indicator: BoxDecoration(
+          color: const Color(0xFFEBEBED),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        indicatorSize: TabBarIndicatorSize.tab,
+        dividerColor: Colors.transparent,
+        tabs: const [
+          Tab(text: '失物招领'),
+          Tab(text: '二手闲置'),
+          Tab(text: '兼职啦'),
+          Tab(text: '以物换物'),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 失物招领页 ────────────────────────────────────────────────────────────────
+
+class _LostFoundTab extends StatefulWidget {
+  @override
+  State<_LostFoundTab> createState() => _LostFoundTabState();
+}
+
+class _LostFoundTabState extends State<_LostFoundTab>
+    with SingleTickerProviderStateMixin {
+  late final TabController _subTabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _subTabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _subTabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Header 区（主色背景）
+        Container(
+          color: const Color(0xFFFFB703),
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+          child: Column(
+            children: [
+              // 工具栏行
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () {},
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // 搜索框
+                  Expanded(
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Row(
+                        children: [
+                          SizedBox(width: 12),
+                          Icon(Icons.search_rounded, color: Color(0xFF999999), size: 18),
+                          SizedBox(width: 6),
+                          Text('搜索失物/招领', style: TextStyle(color: Color(0xFF999999), fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
+                    onTap: () {},
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: const Icon(Icons.tune_rounded, color: Colors.white, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              // 标题行
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    '失物招领',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {},
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFA000),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        '我要发布',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        ),
+        // 白色卡片区（圆角顶部）
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(16),
+            ),
+            boxShadow: [
+              BoxShadow(
+                blurRadius: 8,
+                color: Colors.black.withValues(alpha: 0.06),
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: TabBar(
+            controller: _subTabController,
+            labelColor: const Color(0xFF222222),
+            unselectedLabelColor: const Color(0xFF999999),
+            labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            unselectedLabelStyle: const TextStyle(fontSize: 14),
+            indicatorColor: const Color(0xFFFFB703),
+            indicatorSize: TabBarIndicatorSize.tab,
+            dividerColor: const Color(0xFFF0F0F0),
+            tabs: const [
+              Tab(text: '失物'),
+              Tab(text: '招领'),
+              Tab(text: '全部'),
+            ],
+          ),
+        ),
+        // 列表区
+        Expanded(
+          child: Container(
+            color: const Color(0xFFFFE8C0),
+            child: TabBarView(
+              controller: _subTabController,
+              children: [
+                _LostFoundList(type: 1),
+                _LostFoundList(type: 2),
+                _LostFoundList(type: 0),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LostFoundList extends StatelessWidget {
+  const _LostFoundList({required this.type});
+  final int type; // 0=全部 1=失物 2=招领
+
+  static const _items = [
+    _LostItem(title: '红色钱包一个，内含身份证和银行卡', tags: ['证件', '钱包'], serial: '04-032-14-22'),
+    _LostItem(title: 'AirPods Pro 耳机盒（右耳已丢失）', tags: ['电子', '耳机'], serial: '04-031-09-05'),
+    _LostItem(title: '黑色双肩书包（内有课本和笔记本）', tags: ['背包', '书包'], serial: '04-030-16-48'),
   ];
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('集市'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bookmark_outline_rounded),
-            onPressed: () => context.push('/profile/collects'),
-            tooltip: '我的收藏',
-          ),
-        ],
-      ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 模块入口 Grid
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: GridView.count(
-              shrinkWrap: true,
-              physics:     const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing:  12,
-              childAspectRatio: 1.6,
-              children: _modules.map((m) => _ModuleCard(module: m)).toList(),
-            ),
-          ),
-          // 最新发布占位
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('最新发布',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary)),
-                TextButton(
-                  onPressed: () {},
-                  child: const Text('查看全部',
-                      style: TextStyle(color: AppColors.primary, fontSize: 13)),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: 6,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (_, _) => const _MarketItemPlaceholder(),
-            ),
-          ),
-        ],
-      ),
+    return ListView.builder(
+      padding: const EdgeInsets.all(14),
+      itemCount: _items.length,
+      itemBuilder: (_, i) => _LostFoundCard(item: _items[i]),
     );
   }
 }
 
-class _ModuleCard extends StatelessWidget {
-  const _ModuleCard({required this.module});
-  final _Module module;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(AppRadius.card),
-      onTap:        () => context.push(module.path),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color:        AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          border:       Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color:        module.color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(module.activeIcon, color: module.color, size: 22),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(module.label,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 14)),
-                  const SizedBox(height: 2),
-                  Text(module.description,
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 11),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MarketItemPlaceholder extends StatelessWidget {
-  const _MarketItemPlaceholder();
+class _LostFoundCard extends StatelessWidget {
+  const _LostFoundCard({required this.item});
+  final _LostItem item;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color:        AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border:       Border.all(color: AppColors.border),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 6,
+            color: Colors.black.withValues(alpha: 0.05),
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 图片占位
           Container(
-            width: 72, height: 72,
+            width: 80,
+            height: 80,
             decoration: BoxDecoration(
-              color:        AppColors.primaryLight,
+              color: const Color(0xFFEEEEEE),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.image_outlined, color: AppColors.primary),
+            child: const Center(
+              child: Icon(Icons.image_outlined, color: Color(0xFFCCCCCC), size: 28),
+            ),
           ),
-          const SizedBox(width: 12),
-          const Expanded(
+          const SizedBox(width: 14),
+          // 信息区
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('标题加载中...', style: TextStyle(fontWeight: FontWeight.w500)),
-                SizedBox(height: 4),
-                Text('描述信息', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                SizedBox(height: 6),
-                Text('¥ --', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                Text(
+                  item.title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF222222),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                // 标签行
+                Row(
+                  children: item.tags.map((tag) {
+                    return Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF5E1),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFFFFE0B2)),
+                      ),
+                      child: Text(
+                        tag,
+                        style: const TextStyle(fontSize: 11, color: Color(0xFFD36A00)),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '编号：${item.serial}',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF999999)),
+                ),
               ],
             ),
           ),
@@ -196,20 +336,37 @@ class _MarketItemPlaceholder extends StatelessWidget {
   }
 }
 
-class _Module {
-  const _Module({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.description,
-    required this.color,
-    required this.path,
+class _LostItem {
+  const _LostItem({
+    required this.title,
+    required this.tags,
+    required this.serial,
   });
+  final String title;
+  final List<String> tags;
+  final String serial;
+}
 
-  final IconData icon;
-  final IconData activeIcon;
-  final String   label;
-  final String   description;
-  final Color    color;
-  final String   path;
+// ── 开发中占位页 ──────────────────────────────────────────────────────────────
+
+class _ComingSoonTab extends StatelessWidget {
+  const _ComingSoonTab({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.construction_rounded, size: 48, color: Color(0xFFFFB703)),
+          const SizedBox(height: 12),
+          Text(
+            '$label 开发中...',
+            style: const TextStyle(fontSize: 16, color: Color(0xFF999999)),
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -37,7 +37,7 @@ class _RouterNotifier extends ChangeNotifier {
       return onAuthRoute ? null : '/auth/login';
     }
 
-    // 已登录 + 访问登录/注册页 → 回首页
+    // 已登录 + 访问登录/注册/已完成问卷 → 回首页
     if (loggedIn && (location == '/auth/login' || location == '/auth/register')) {
       return '/buddy';
     }
@@ -45,6 +45,11 @@ class _RouterNotifier extends ChangeNotifier {
     // 已登录 + 未完成问卷 → 问卷页
     if (currentUser?.isNewUser == true && location != '/auth/questionnaire') {
       return '/auth/questionnaire';
+    }
+
+    // 已登录 + 已完成问卷 + 还在问卷页 → 跳回首页
+    if (loggedIn && currentUser?.isNewUser == false && location == '/auth/questionnaire') {
+      return '/buddy';
     }
 
     return null;
@@ -93,28 +98,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       StatefulShellRoute.indexedStack(
         builder: (_, _, shell) => PmBottomNav(shell: shell),
         branches: [
-          // Tab 0：搭子
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path:    '/buddy',
-              builder: (_, _) => const BuddyScreen(),
-              routes: [
-                GoRoute(path: 'candidates',  builder: (_, _) => const PmPlaceholderScreen(title: '搭子推荐')),
-                GoRoute(path: 'invitations', builder: (_, _) => const PmPlaceholderScreen(title: '邀约管理')),
-                GoRoute(path: 'career',      builder: (_, _) => const PmPlaceholderScreen(title: '职业搭子阵地')),
-              ],
-            ),
-          ]),
-
-          // Tab 1：趣玩
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path:    '/fun',
-              builder: (_, _) => const FunScreen(),
-            ),
-          ]),
-
-          // Tab 2：圈子
+          // Tab 0：圈子
           StatefulShellBranch(routes: [
             GoRoute(
               path:    '/circle',
@@ -142,7 +126,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ]),
 
-          // Tab 3：集市
+          // Tab 1：集市
           StatefulShellBranch(routes: [
             GoRoute(
               path:    '/market',
@@ -181,6 +165,27 @@ final routerProvider = Provider<GoRouter>((ref) {
                   ],
                 ),
               ],
+            ),
+          ]),
+
+          // Tab 2：搭子
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path:    '/buddy',
+              builder: (_, _) => const BuddyScreen(),
+              routes: [
+                GoRoute(path: 'candidates',  builder: (_, _) => const PmPlaceholderScreen(title: '搭子推荐')),
+                GoRoute(path: 'invitations', builder: (_, _) => const PmPlaceholderScreen(title: '邀约管理')),
+                GoRoute(path: 'career',      builder: (_, _) => const PmPlaceholderScreen(title: '职业搭子阵地')),
+              ],
+            ),
+          ]),
+
+          // Tab 3：趣玩
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path:    '/fun',
+              builder: (_, _) => const FunScreen(),
             ),
           ]),
 

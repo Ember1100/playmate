@@ -32,6 +32,18 @@ class UserModel {
   final int     gender;
   final String? birthday;
   final bool    isNewUser;
+
+  UserModel copyWith({bool? isNewUser}) => UserModel(
+        id:        id,
+        username:  username,
+        email:     email,
+        phone:     phone,
+        avatarUrl: avatarUrl,
+        bio:       bio,
+        gender:    gender,
+        birthday:  birthday,
+        isNewUser: isNewUser ?? this.isNewUser,
+      );
 }
 
 class AuthResponse {

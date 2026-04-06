@@ -73,6 +73,29 @@ class AuthRepository {
     await _storage.clear();
   }
 
+  Future<void> submitQuestionnaire({
+    required String identity,
+    required String city,
+    required String ageRange,
+    required List<int> interests,
+    required List<int> purposes,
+  }) async {
+    try {
+      await _client.post<Map<String, dynamic>>(
+        '/users/me/questionnaire',
+        data: {
+          'identity':  identity,
+          'city':      city,
+          'age_range': ageRange,
+          'interests': interests,
+          'purposes':  purposes,
+        },
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   Future<bool> isLoggedIn() async {
     final token = await _storage.getAccessToken();
     return token != null;

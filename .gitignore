@@ -17,3 +17,6 @@ infra/.env.prod
 
 # 日志
 *.log
+
+# ui原型
+/ui/
