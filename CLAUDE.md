@@ -4,6 +4,7 @@
 
 | 日期 | 章节 | 变更内容 |
 |------|------|---------|
+| 2026-04-05 | Flutter转场手势 | 淡入淡出转场、PmSwipeBack手势返回组件规范 |
 | 2026-04-05 | 设计规范PPT | 补充Tab顺序/主色#FF7A00/年龄限制35岁/信用分/问卷字段/学习笔记 |
 | 2026-04-05 | 全面重写v2 | 根据功能架构全览图补全所有模块，明确MVP边界 |
 
@@ -1096,3 +1097,94 @@ buddy_request   → 搭子邀约（接受/拒绝）
 interaction     → 互动消息（点赞/评论/回复）
 invitation      → 邀约消息
 ```
+
+---
+
+## Flutter 页面转场与手势规范（2026-04-05）
+
+### 转场动画
+
+统一使用**淡入淡出**转场，禁止 iOS 默认的跟手侧滑动画（页面会跟着手指移动）。
+
+在 `app/theme.dart` 中配置：
+
+```dart
+// app/theme.dart
+class _FadePageTransitionsBuilder extends PageTransitionsBuilder {
+  const _FadePageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return FadeTransition(opacity: animation, child: child);
+  }
+}
+
+// 应用到 ThemeData
+ThemeData get theme => ThemeData(
+  // ... 其他配置
+  pageTransitionsTheme: const PageTransitionsTheme(
+    builders: {
+      TargetPlatform.iOS:     _FadePageTransitionsBuilder(),
+      TargetPlatform.android: _FadePageTransitionsBuilder(),
+    },
+  ),
+);
+```
+
+### 返回手势规范
+
+禁用系统默认侧滑返回后，在每个页面最外层包 `GestureDetector` 实现手势返回：
+
+```dart
+// shared/widgets/pm_swipe_back.dart
+// 封装成公共组件，所有页面复用
+
+class PmSwipeBack extends StatelessWidget {
+  final Widget child;
+  const PmSwipeBack({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        // 向右滑动速度 > 300px/s 且有页面可返回，则 pop
+        if (details.primaryVelocity != null &&
+            details.primaryVelocity! > 300 &&
+            Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+      },
+      child: child,
+    );
+  }
+}
+```
+
+使用方式——每个二级页面（非 Tab 根页面）最外层包裹：
+
+```dart
+// 示例：集市详情页
+class LostFoundDetailPage extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return PmSwipeBack(          // ← 最外层包裹
+      child: Scaffold(
+        // ... 页面内容
+      ),
+    );
+  }
+}
+```
+
+### 规则
+
+- **Tab 根页面**（搭子/趣玩/圈子/集市/我的）：不需要包 `PmSwipeBack`，没有返回操作
+- **所有二级及以上页面**：必须包 `PmSwipeBack`
+- 拖动过程中页面完全静止，只在手指松开后判断是否返回
+- 禁止在单个页面里自定义其他侧滑逻辑，统一用 `PmSwipeBack`
