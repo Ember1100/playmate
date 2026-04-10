@@ -194,13 +194,16 @@ class ProfileScreen extends ConsumerWidget {
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: AppColors.warmBg,
+              color: const Color(0xFFFFB703),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.border),
             ),
             child: Text(
               tag,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF666666)),
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           );
         }).toList(),

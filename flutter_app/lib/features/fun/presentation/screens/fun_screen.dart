@@ -12,27 +12,60 @@ class _FunScreenState extends State<FunScreen> {
   int _selectedFilter = 0;
 
   static const _categories = [
-    _Category(emoji: '🌴', label: '旅游'),
-    _Category(emoji: '🤝', label: '交游'),
-    _Category(emoji: '⚡', label: '轻运动'),
-    _Category(emoji: '🎉', label: '娱乐'),
-    _Category(emoji: '✨', label: '二次元'),
+    _Category(emoji: '🏆', label: '我参与'),
+    _Category(emoji: '🛍️', label: '好物团'),
+    _Category(emoji: '🗺️', label: '全年线'),
+    _Category(emoji: '✈️', label: '国际线'),
+    _Category(emoji: '🎨', label: '定制游'),
   ];
 
-  static const _filters = ['亲子游', '周边游', '短途旅行', '文化体验'];
+  static const _filters = ['探游', '交游', '轻运动', '娱乐', '二次元'];
 
+  // TODO: replace with API call to GET /api/v1/fun/activities
   static const _feed1 = [
-    _ActivityItem(title: '上海迪士尼亲子一日游', subtitle: '4月15日 周六'),
-    _ActivityItem(title: '苏州古镇慢生活体验', subtitle: '4月20日 周四'),
-    _ActivityItem(title: '南京博物馆文化之旅', subtitle: '4月22日 周六'),
-    _ActivityItem(title: '嘉兴南湖亲子露营', subtitle: '4月28日 周五'),
+    _ActivityItem(
+      title: '红色教育基地参观研学',
+      subtitle: '4月15日 周二',
+      imageId: 1048,
+    ),
+    _ActivityItem(
+      title: '延安精神传承营（3天）',
+      subtitle: '4月20日 周日',
+      imageId: 1059,
+    ),
+    _ActivityItem(
+      title: '南京博物馆文化之旅',
+      subtitle: '4月22日 周二',
+      imageId: 1069,
+    ),
+    _ActivityItem(
+      title: '井冈山红色研学游',
+      subtitle: '4月28日 周一',
+      imageId: 1074,
+    ),
   ];
 
   static const _feed2 = [
-    _ActivityItem(title: '周末爬山 · 天目山一日游', subtitle: '4月13日 周日'),
-    _ActivityItem(title: '杭州西湖自行车环游', subtitle: '4月19日 周六'),
-    _ActivityItem(title: '上海郊野公园徒步', subtitle: '4月26日 周六'),
-    _ActivityItem(title: '苏州太湖周边游', subtitle: '5月3日 周六'),
+    _ActivityItem(
+      title: '周末汉服同城聚会',
+      subtitle: '4月13日 周日',
+      imageId: 1011,
+    ),
+    _ActivityItem(
+      title: '古城小巷摄影交流',
+      subtitle: '4月19日 周六',
+      imageId: 1016,
+    ),
+    _ActivityItem(
+      title: '周末咖啡读书会',
+      subtitle: '4月26日 周六',
+      imageId: 1021,
+    ),
+    _ActivityItem(
+      title: '城市徒步 · 外滩夜走',
+      subtitle: '5月3日 周六',
+      imageId: 1026,
+    ),
   ];
 
   @override
@@ -45,8 +78,8 @@ class _FunScreenState extends State<FunScreen> {
           _buildCategoryRow(),
           const Divider(height: 1, color: Color(0xFFEEE0C0)),
           _buildFilterRow(),
-          _buildFeedSection(title: '亲子家庭', items: _feed1),
-          _buildFeedSection(title: '户外探索', items: _feed2),
+          _buildFeedSection(title: '红色旅游', items: _feed1),
+          _buildFeedSection(title: '同城聚会', items: _feed2),
           const SizedBox(height: 24),
         ],
       ),
@@ -61,9 +94,18 @@ class _FunScreenState extends State<FunScreen> {
       height: heroHeight,
       child: Stack(
         children: [
-          // 占位背景（模拟图片）
-          Container(
-            color: const Color(0xFFFFE8C0),
+          // Hero 背景图
+          Image.network(
+            'https://picsum.photos/id/1036/1200/600',
+            width: double.infinity,
+            height: double.infinity,
+            fit: BoxFit.cover,
+            loadingBuilder: (_, child, progress) {
+              if (progress == null) return child;
+              return Container(color: const Color(0xFFFFE8C0));
+            },
+            errorBuilder: (_, e, s) =>
+                Container(color: const Color(0xFFFFE8C0)),
           ),
           // 渐变遮罩（底部暗渐变）
           Positioned.fill(
@@ -325,16 +367,21 @@ class _ActivityCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 图片占位（aspect ratio 4:3）
+          // 图片（aspect ratio 4:3）
           AspectRatio(
             aspectRatio: 4 / 3,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFE8C0),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
-              ),
-              child: const Center(
-                child: Icon(Icons.image_outlined, color: Color(0xFFCCCCCC), size: 24),
+            child: ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(8)),
+              child: Image.network(
+                'https://picsum.photos/id/${item.imageId}/280/210',
+                fit: BoxFit.cover,
+                loadingBuilder: (_, child, progress) {
+                  if (progress == null) return child;
+                  return Container(color: const Color(0xFFFFE8C0));
+                },
+                errorBuilder: (_, e, s) =>
+                    Container(color: const Color(0xFFFFE8C0)),
               ),
             ),
           ),
@@ -357,7 +404,8 @@ class _ActivityCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   item.subtitle,
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF999999)),
+                  style:
+                      const TextStyle(fontSize: 11, color: Color(0xFF999999)),
                 ),
               ],
             ),
@@ -375,7 +423,12 @@ class _Category {
 }
 
 class _ActivityItem {
-  const _ActivityItem({required this.title, required this.subtitle});
+  const _ActivityItem({
+    required this.title,
+    required this.subtitle,
+    required this.imageId,
+  });
   final String title;
   final String subtitle;
+  final int imageId;
 }
