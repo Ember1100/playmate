@@ -35,9 +35,9 @@ class MarketScreen extends StatelessWidget {
 
   Widget _buildTopTabBar() {
     return Container(
-      color: const Color(0xFFF7F7F8),
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
       decoration: const BoxDecoration(
+        color: Color(0xFFF7F7F8),
         border: Border(
           bottom: BorderSide(color: Color(0xFFEEEEEE), width: 1),
         ),
