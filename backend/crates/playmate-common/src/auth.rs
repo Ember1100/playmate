@@ -16,8 +16,8 @@ use uuid::Uuid;
 
 use crate::{error::AppError, state::AppState};
 
-/// Access Token 有效期：2 小时（秒）
-pub const ACCESS_TOKEN_DURATION: i64 = 2 * 60 * 60;
+/// Access Token 有效期：7 天（秒）
+pub const ACCESS_TOKEN_DURATION: i64 = 7 * 24 * 60 * 60;
 /// Refresh Token 有效期：30 天（秒）
 pub const REFRESH_TOKEN_DURATION: i64 = 30 * 24 * 60 * 60;
 

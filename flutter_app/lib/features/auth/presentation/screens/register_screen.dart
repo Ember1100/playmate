@@ -78,7 +78,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  '加入玩伴，认识有趣的人',
+                  '加入搭伴，认识有趣的人',
                   style: TextStyle(
                       fontSize: 15, color: AppColors.textSecondary),
                 ),

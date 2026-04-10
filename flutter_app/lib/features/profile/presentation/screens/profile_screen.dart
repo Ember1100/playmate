@@ -89,7 +89,7 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   Widget _buildUserInfo(dynamic user) {
-    final username = user?.username as String? ?? '玩伴用户';
+    final username = user?.username as String? ?? '搭伴用户';
     final initial = username.isNotEmpty ? username.substring(0, 1).toUpperCase() : '?';
 
     return Padding(

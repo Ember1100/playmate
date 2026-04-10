@@ -60,7 +60,7 @@ class ImScreen extends ConsumerWidget {
                       size: 64, color: AppColors.textSecondary),
                   SizedBox(height: 16),
                   Text(
-                    '暂无消息，去发现玩伴吧',
+                    '暂无消息，去发现搭伴吧',
                     style: TextStyle(
                         color: AppColors.textSecondary, fontSize: 16),
                   ),

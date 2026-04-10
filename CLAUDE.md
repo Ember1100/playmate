@@ -1,4 +1,4 @@
-# CLAUDE.md — 玩伴 (Playmate)
+# CLAUDE.md — 搭伴 (Playmate)
 
 ## 最近更新（Claude Code 每次启动必读）
 
@@ -35,7 +35,7 @@
 
 ## 产品定位
 
-**玩伴（Playmate）** — 兴趣社交 + 本地生活服务 App
+**搭伴（Playmate）** — 兴趣社交 + 本地生活服务 App
 
 底部 5 个 Tab：
 
@@ -777,7 +777,7 @@ WECHAT_APP_ID=wx...
 WECHAT_APP_SECRET=...
 ALIYUN_SMS_ACCESS_KEY=...
 ALIYUN_SMS_SECRET=...
-ALIYUN_SMS_SIGN_NAME=玩伴
+ALIYUN_SMS_SIGN_NAME=搭伴
 ALIYUN_SMS_TEMPLATE_CODE=SMS_...
 STORAGE_ENDPOINT=http://localhost:9000
 STORAGE_PUBLIC_ENDPOINT=http://8.138.190.48:9000

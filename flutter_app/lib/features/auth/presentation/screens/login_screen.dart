@@ -74,7 +74,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 24),
 
                 const Text(
-                  '欢迎来到玩伴',
+                  '欢迎来到搭伴',
                   style: TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.w700,

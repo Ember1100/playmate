@@ -29,7 +29,7 @@ class PlaymateApp extends ConsumerWidget {
                                        color: Colors.white, size: 40),
                 ),
                 SizedBox(height: 16),
-                Text('玩伴',
+                Text('搭伴',
                     style: TextStyle(
                         fontSize:   24,
                         fontWeight: FontWeight.bold,
@@ -43,7 +43,7 @@ class PlaymateApp extends ConsumerWidget {
 
     final router = ref.watch(routerProvider);
     return MaterialApp.router(
-      title:                    '玩伴',
+      title:                    '搭伴',
       theme:                    AppTheme.light,
       routerConfig:             router,
       debugShowCheckedModeBanner: false,

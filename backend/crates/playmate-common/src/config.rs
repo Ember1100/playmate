@@ -43,7 +43,7 @@ pub struct AppConfig {
 
 fn default_host() -> String { "0.0.0.0".to_string() }
 fn default_port() -> u16 { 8080 }
-fn default_sms_sign() -> String { "玩伴".to_string() }
+fn default_sms_sign() -> String { "搭伴".to_string() }
 fn default_storage_endpoint() -> String { "http://localhost:9000".to_string() }
 fn default_storage_region() -> String { "us-east-1".to_string() }
 

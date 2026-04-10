@@ -35,7 +35,7 @@ class DiscoverScreen extends ConsumerWidget {
           child: const Text('筛选',
               style: TextStyle(color: AppColors.primary, fontSize: 15)),
         ),
-        title: const Text('发现玩伴'),
+        title: const Text('发现搭伴'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
