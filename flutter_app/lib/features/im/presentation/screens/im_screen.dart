@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../shared/widgets/pm_image.dart';
 import '../../providers/im_provider.dart';
 
 class ImScreen extends ConsumerWidget {
@@ -124,7 +125,7 @@ class ImScreen extends ConsumerWidget {
                           radius: 22,
                           backgroundColor: avatarColor,
                           backgroundImage: conv.otherAvatarUrl != null
-                              ? NetworkImage(conv.otherAvatarUrl!)
+                              ? PmImageProvider(conv.otherAvatarUrl!)
                               : null,
                           child: conv.otherAvatarUrl == null
                               ? Text(

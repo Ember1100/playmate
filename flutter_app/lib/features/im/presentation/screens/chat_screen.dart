@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/api/api_client.dart';
+import '../../../../shared/widgets/pm_image.dart';
 import '../../../../core/services/upload_service.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../auth/providers/auth_provider.dart';
@@ -413,7 +414,7 @@ class _MessageBubble extends StatelessWidget {
                   radius: 16,
                   backgroundColor: AppColors.secondary,
                   backgroundImage: otherAvatarUrl != null
-                      ? NetworkImage(otherAvatarUrl!)
+                      ? PmImageProvider(otherAvatarUrl!)
                       : null,
                   child: otherAvatarUrl == null
                       ? Text(
@@ -489,26 +490,11 @@ class _MessageBubble extends StatelessWidget {
           bottomLeft: Radius.circular(isMe ? 12 : 4),
           bottomRight: Radius.circular(isMe ? 4 : 12),
         ),
-        child: Image.network(
+        child: PmImage(
           message.mediaUrl!,
           width: 180,
+          height: 120,
           fit: BoxFit.cover,
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Container(
-              width: 180,
-              height: 120,
-              color: AppColors.background,
-              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) => Container(
-            width: 180,
-            height: 120,
-            color: AppColors.background,
-            child: const Icon(Icons.broken_image,
-                color: AppColors.textSecondary),
-          ),
         ),
       );
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../app/theme.dart';
+import '../../../../shared/widgets/pm_image.dart';
 import '../../../auth/providers/auth_provider.dart';
 
 /// 我的 Tab 首页
@@ -101,7 +102,7 @@ class ProfileScreen extends ConsumerWidget {
             radius: 32,
             backgroundColor: const Color(0xFFFFD166),
             backgroundImage: user?.avatarUrl != null
-                ? NetworkImage(user!.avatarUrl as String) as ImageProvider
+                ? PmImageProvider(user!.avatarUrl as String)
                 : null,
             child: user?.avatarUrl == null
                 ? Text(
@@ -347,16 +348,16 @@ class ProfileScreen extends ConsumerWidget {
         onTap: () async {
           final confirm = await showDialog<bool>(
             context: context,
-            builder: (_) => AlertDialog(
+            builder: (dialogContext) => AlertDialog(
               title: const Text('退出登录'),
               content: const Text('确认退出当前账号？'),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context, false),
+                  onPressed: () => Navigator.pop(dialogContext, false),
                   child: const Text('取消'),
                 ),
                 TextButton(
-                  onPressed: () => Navigator.pop(context, true),
+                  onPressed: () => Navigator.pop(dialogContext, true),
                   child: const Text(
                     '退出',
                     style: TextStyle(color: Color(0xFFE24B4A)),

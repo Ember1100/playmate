@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import '../../../../shared/widgets/pm_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -142,7 +143,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       backgroundColor: AppColors.primary,
                       backgroundImage: _avatarFile != null
                           ? FileImage(_avatarFile!) as ImageProvider
-                          : (_avatarUrl != null ? NetworkImage(_avatarUrl!) : null),
+                          : (_avatarUrl != null ? PmImageProvider(_avatarUrl!) : null),
                       child: (_avatarFile == null && _avatarUrl == null)
                           ? Text(
                               (_usernameController.text.isNotEmpty

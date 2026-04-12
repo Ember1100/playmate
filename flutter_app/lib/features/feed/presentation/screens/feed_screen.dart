@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../../../../shared/widgets/pm_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -195,14 +196,9 @@ class _PostCardState extends State<_PostCard> {
                 itemCount: urls.length,
                 itemBuilder: (ctx, index) => InteractiveViewer(
                   child: Center(
-                    child: Image.network(
+                    child: PmImage(
                       urls[index],
                       fit: BoxFit.contain,
-                      errorBuilder: (ctx, _, __) => const Icon(
-                        Icons.broken_image,
-                        color: Colors.white54,
-                        size: 64,
-                      ),
                     ),
                   ),
                 ),
@@ -284,7 +280,7 @@ class _PostCardState extends State<_PostCard> {
                 radius: 22,
                 backgroundColor: widget.avatarColor,
                 backgroundImage: post.avatarUrl != null
-                    ? NetworkImage(post.avatarUrl!)
+                    ? PmImageProvider(post.avatarUrl!)
                     : null,
                 child: post.avatarUrl == null
                     ? Text(
@@ -364,19 +360,7 @@ class _PostCardState extends State<_PostCard> {
                     onTap: () => _showImagePreview(context, post.mediaUrls, index),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        post.mediaUrls[index],
-                        height: 180,
-                        width: 180,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          width: 180,
-                          height: 180,
-                          color: AppColors.background,
-                          child: const Icon(Icons.broken_image,
-                              color: AppColors.textSecondary),
-                        ),
-                      ),
+                      child: PmImage(post.mediaUrls[index], width: 180, height: 180, fit: BoxFit.cover),
                     ),
                   );
                 },

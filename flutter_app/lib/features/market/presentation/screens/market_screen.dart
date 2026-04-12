@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../shared/widgets/pm_image.dart';
 
 // TODO: replace static data with API calls to /api/v1/market/...
 
@@ -356,18 +357,7 @@ class _LostFoundCard extends StatelessWidget {
             child: SizedBox(
               width: 80,
               height: 80,
-              child: Image.network(
-                item.imageUrl,
-                width: 80,
-                height: 80,
-                fit: BoxFit.cover,
-                loadingBuilder: (_, child, progress) {
-                  if (progress == null) return child;
-                  return _imagePlaceholder(const Color(0xFFFFE0B2));
-                },
-                errorBuilder: (_, e, s) =>
-                    _imagePlaceholder(const Color(0xFFFFE0B2)),
-              ),
+              child: PmImage(item.imageUrl, width: 80, height: 80, fit: BoxFit.cover),
             ),
           ),
           const SizedBox(width: 14),
@@ -593,16 +583,7 @@ class _SecondHandCard extends StatelessWidget {
                   const BorderRadius.vertical(top: Radius.circular(12)),
               child: SizedBox(
                 width: double.infinity,
-                child: Image.network(
-                  item.imageUrl,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (_, child, progress) {
-                    if (progress == null) return child;
-                    return _imagePlaceholder(const Color(0xFFFFE0D0));
-                  },
-                  errorBuilder: (_, e, s) =>
-                      _imagePlaceholder(const Color(0xFFFFE0D0)),
-                ),
+                child: PmImage(item.imageUrl, fit: BoxFit.cover),
               ),
             ),
           ),
@@ -826,16 +807,7 @@ class _PartTimeCard extends StatelessWidget {
             child: SizedBox(
               height: 120,
               width: double.infinity,
-              child: Image.network(
-                item.imageUrl,
-                fit: BoxFit.cover,
-                loadingBuilder: (_, child, progress) {
-                  if (progress == null) return child;
-                  return _imagePlaceholder(const Color(0xFFD0F0E8));
-                },
-                errorBuilder: (_, e, s) =>
-                    _imagePlaceholder(const Color(0xFFD0F0E8)),
-              ),
+              child: PmImage(item.imageUrl, fit: BoxFit.cover),
             ),
           ),
           Padding(
@@ -1026,16 +998,7 @@ class _BarterCard extends StatelessWidget {
                   const BorderRadius.vertical(top: Radius.circular(12)),
               child: SizedBox(
                 width: double.infinity,
-                child: Image.network(
-                  item.imageUrl,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (_, child, progress) {
-                    if (progress == null) return child;
-                    return _imagePlaceholder(const Color(0xFFE8D8F8));
-                  },
-                  errorBuilder: (_, e, s) =>
-                      _imagePlaceholder(const Color(0xFFE8D8F8)),
-                ),
+                child: PmImage(item.imageUrl, fit: BoxFit.cover),
               ),
             ),
           ),

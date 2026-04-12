@@ -1,0 +1,103 @@
+{
+  "pages": [
+    {
+      "path": "pages/circle/index",
+      "style": { "navigationBarTitleText": "圈子", "navigationBarBackgroundColor": "#FFFFFF", "navigationBarTextStyle": "black" }
+    },
+    {
+      "path": "pages/market/index",
+      "style": { "navigationBarTitleText": "集市", "navigationBarBackgroundColor": "#FFFFFF", "navigationBarTextStyle": "black" }
+    },
+    {
+      "path": "pages/buddy/index",
+      "style": { "navigationBarTitleText": "搭子", "navigationBarBackgroundColor": "#FFFFFF", "navigationBarTextStyle": "black" }
+    },
+    {
+      "path": "pages/fun/index",
+      "style": { "navigationBarTitleText": "趣玩", "navigationBarBackgroundColor": "#FFFFFF", "navigationBarTextStyle": "black" }
+    },
+    {
+      "path": "pages/profile/index",
+      "style": { "navigationBarTitleText": "我的", "navigationBarBackgroundColor": "#FFFFFF", "navigationBarTextStyle": "black" }
+    },
+
+    { "path": "pages/auth/login",         "style": { "navigationBarTitleText": "登录",    "navigationStyle": "custom" } },
+    { "path": "pages/auth/register",      "style": { "navigationBarTitleText": "注册",    "navigationStyle": "custom" } },
+    { "path": "pages/auth/questionnaire", "style": { "navigationBarTitleText": "完善资料" } },
+
+    { "path": "pages/buddy/candidates",   "style": { "navigationBarTitleText": "找搭子" } },
+    { "path": "pages/buddy/detail",       "style": { "navigationBarTitleText": "搭子详情" } },
+    { "path": "pages/buddy/invitations",  "style": { "navigationBarTitleText": "邀约管理" } },
+    { "path": "pages/buddy/career",       "style": { "navigationBarTitleText": "职业搭子阵地" } },
+
+    { "path": "pages/circle/topic-detail", "style": { "navigationBarTitleText": "话题详情" } },
+    { "path": "pages/circle/poll-detail",  "style": { "navigationBarTitleText": "投票详情" } },
+    { "path": "pages/circle/groups",       "style": { "navigationBarTitleText": "社群" } },
+    { "path": "pages/circle/group-chat",   "style": { "navigationBarTitleText": "社群聊天", "navigationBarBackgroundColor": "#F5F5F5" } },
+
+    { "path": "pages/profile/notifications", "style": { "navigationBarTitleText": "消息中心" } },
+    { "path": "pages/profile/collects",      "style": { "navigationBarTitleText": "我的收藏" } },
+    { "path": "pages/profile/member",        "style": { "navigationBarTitleText": "会员中心" } },
+    { "path": "pages/profile/growth-report", "style": { "navigationBarTitleText": "成长报告" } },
+    { "path": "pages/profile/feedback",      "style": { "navigationBarTitleText": "需求反馈" } },
+    { "path": "pages/profile/notes",         "style": { "navigationBarTitleText": "学习笔记" } },
+    { "path": "pages/profile/settings",      "style": { "navigationBarTitleText": "设置" } },
+
+    { "path": "pages/im/chat", "style": { "navigationBarTitleText": "私信", "navigationBarBackgroundColor": "#F5F5F5" } }
+  ],
+  "subPackages": [
+    {
+      "root": "pages/market/lost-found",
+      "pages": [
+        { "path": "index",   "style": { "navigationBarTitleText": "失物招领" } },
+        { "path": "detail",  "style": { "navigationBarTitleText": "失物详情" } },
+        { "path": "publish", "style": { "navigationBarTitleText": "发布失物" } }
+      ]
+    },
+    {
+      "root": "pages/market/second-hand",
+      "pages": [
+        { "path": "index",   "style": { "navigationBarTitleText": "二手闲置" } },
+        { "path": "detail",  "style": { "navigationBarTitleText": "商品详情" } },
+        { "path": "publish", "style": { "navigationBarTitleText": "发布商品" } }
+      ]
+    },
+    {
+      "root": "pages/market/part-time",
+      "pages": [
+        { "path": "index",   "style": { "navigationBarTitleText": "兼职啦" } },
+        { "path": "detail",  "style": { "navigationBarTitleText": "兼职详情" } },
+        { "path": "publish", "style": { "navigationBarTitleText": "发布兼职" } }
+      ]
+    },
+    {
+      "root": "pages/market/barter",
+      "pages": [
+        { "path": "index",   "style": { "navigationBarTitleText": "以物换物" } },
+        { "path": "detail",  "style": { "navigationBarTitleText": "换物详情" } },
+        { "path": "publish", "style": { "navigationBarTitleText": "发布换物" } }
+      ]
+    }
+  ],
+  "tabBar": {
+    "custom": true,
+    "color": "#888780",
+    "selectedColor": "#FFB703",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "height": "98px",
+    "list": [
+      { "pagePath": "pages/circle/index",  "text": "圈子" },
+      { "pagePath": "pages/market/index",  "text": "集市" },
+      { "pagePath": "pages/buddy/index",   "text": "搭子" },
+      { "pagePath": "pages/fun/index",     "text": "趣玩" },
+      { "pagePath": "pages/profile/index", "text": "我的" }
+    ]
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "搭伴",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#FFF8EC"
+  }
+}

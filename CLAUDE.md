@@ -4,8 +4,10 @@
 
 | 日期 | 章节 | 变更内容 |
 |------|------|---------|
+| 2026-04-12 | Flutter公共组件 | 新增PmImage/PmImageProvider规范，禁止直接使用Image.network/NetworkImage |
+| 2026-04-12 | Tab顺序 | 修正为圈子/集市/搭子/趣玩/我的，uni-app pages.json同步更新 |
+| 2026-04-11 | uni-app 规范 | 新增微信小程序客户端规范，与Flutter共享后端API |
 | 2026-04-05 | Flutter转场手势 | 淡入淡出转场、PmSwipeBack手势返回组件规范 |
-| 2026-04-05 | 设计规范PPT | 补充Tab顺序/主色#FF7A00/年龄限制35岁/信用分/问卷字段/学习笔记 |
 | 2026-04-05 | 全面重写v2 | 根据功能架构全览图补全所有模块，明确MVP边界 |
 
 > 本文件是 Claude Code 的核心上下文。每次开始新任务前必须完整阅读。
@@ -76,7 +78,8 @@ playmate/
 │       ├── playmate-market/    ← 集市：失物/闲置/兼职/换物
 │       ├── playmate-buddy/     ← 搭子：推荐/邀约/职业阵地
 │       └── playmate-im/        ← 私信/群聊/WebSocket
-├── flutter_app/
+├── flutter_app/                ← Flutter 客户端（iOS/Android）
+├── miniprogram/                ← uni-app 客户端（微信小程序）
 └── infra/
     ├── docker-compose.prod.yml
     ├── .env.prod
@@ -963,17 +966,15 @@ cargo clippy -- -D warnings && cargo fmt --check
 
 ### Tab 顺序（以此为准）
 
-PPT 明确的底部导航顺序：
+底部导航顺序（Flutter / uni-app 均以此为准）：
 
 | 位置 | Tab | 说明 |
 |------|-----|------|
-| 1 | 搭子 | 默认首页 |
-| 2 | 趣玩 | 活动中心（MVP静态） |
-| 3 | 圈子 | 话题/投票/社群 |
-| 4 | 集市 | 失物/闲置/兼职/换物 |
+| 1 | 圈子 | 话题/投票/社群 |
+| 2 | 集市 | 失物/闲置/兼职/换物 |
+| 3 | 搭子 | 搭子推荐/邀约/职业搭子阵地 |
+| 4 | 趣玩 | 活动中心（MVP静态） |
 | 5 | 我的 | 个人中心 |
-
-> 注意：之前路由规范里 Tab 顺序有误，Flutter 开发以此表为准。
 
 ### 用户准入规则
 
@@ -1188,3 +1189,340 @@ class LostFoundDetailPage extends StatelessWidget {
 - **所有二级及以上页面**：必须包 `PmSwipeBack`
 - 拖动过程中页面完全静止，只在手指松开后判断是否返回
 - 禁止在单个页面里自定义其他侧滑逻辑，统一用 `PmSwipeBack`
+
+---
+
+## Flutter 公共组件规范（shared/widgets/）
+
+### PmImage — 网络图片（磁盘缓存）
+
+> 文件：`shared/widgets/pm_image.dart`
+> 依赖：`cached_network_image`（已在 pubspec.yaml 中）
+
+**禁止**在任何地方直接使用 `Image.network` 或 `NetworkImage`，统一用以下两个封装：
+
+#### `PmImage` — 替代 `Image.network`
+
+```dart
+// 基本用法
+PmImage(url, width: 80, height: 80, fit: BoxFit.cover)
+
+// 带圆角（PmImage 内部用 ClipRRect，无需外层再套）
+PmImage(url, width: 102, height: 82, borderRadius: BorderRadius.circular(10))
+
+// 全尺寸铺满
+PmImage(url, width: double.infinity, height: double.infinity)
+
+// 自定义占位符
+PmImage(url, placeholder: Container(color: Colors.grey))
+```
+
+参数说明：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `url` | `String?` | 图片 URL，null 或空字符串显示占位符 |
+| `width` | `double?` | 宽度 |
+| `height` | `double?` | 高度 |
+| `fit` | `BoxFit` | 默认 `BoxFit.cover` |
+| `borderRadius` | `BorderRadius?` | 圆角，内部用 ClipRRect 处理 |
+| `placeholder` | `Widget?` | 加载中/URL为空时的占位，默认浅黄色块 |
+
+#### `PmImageProvider` — 替代 `NetworkImage`
+
+用于 `CircleAvatar.backgroundImage`、`BoxDecoration.image` 等需要 `ImageProvider` 的场景：
+
+```dart
+// 替代 NetworkImage(url)
+CircleAvatar(
+  backgroundImage: avatarUrl != null ? PmImageProvider(avatarUrl!) : null,
+)
+```
+
+#### 规则
+
+- **禁止** `Image.network(url, ...)` → 改用 `PmImage(url, ...)`
+- **禁止** `NetworkImage(url)` → 改用 `PmImageProvider(url)`
+- `loadingBuilder` / `errorBuilder` 已内置，无需手写
+- 已在 `ClipRRect` 内的图片：直接把 `Image.network` 换成 `PmImage`，不需要额外传 `borderRadius`
+
+### PmSwipeBack — 手势返回
+
+## uni-app 客户端规范（微信小程序）
+ 
+### 定位
+ 
+与 Flutter App 共享同一套后端 API，样式与交互保持一致，针对小程序平台适配。
+ 
+### 技术栈
+ 
+```
+uni-app + Vue3 + Pinia + TypeScript
+目标平台：微信小程序（mp-weixin）
+```
+ 
+### 项目结构
+ 
+```
+miniprogram/
+├── src/
+│   ├── App.vue
+│   ├── main.ts
+│   ├── pages.json           ← 页面路由配置（等同 Flutter router.dart）
+│   ├── manifest.json        ← 小程序配置
+│   ├── uni.scss             ← 全局样式变量
+│   ├── api/                 ← 接口封装（对应 Flutter core/network）
+│   │   ├── request.ts       ← 封装 uni.request，自动注入 JWT
+│   │   ├── auth.ts
+│   │   ├── buddy.ts
+│   │   ├── circle.ts
+│   │   ├── market.ts
+│   │   └── im.ts
+│   ├── store/               ← Pinia 状态管理（对应 Flutter Riverpod）
+│   │   ├── user.ts
+│   │   ├── buddy.ts
+│   │   └── market.ts
+│   ├── components/          ← 公共组件，命名加 Pm 前缀
+│   │   ├── PmAvatar.vue
+│   │   ├── PmButton.vue
+│   │   ├── PmTagChip.vue
+│   │   ├── PmEmpty.vue
+│   │   └── PmLoading.vue
+│   └── pages/               ← 页面，结构与 Flutter features 对应
+│       ├── auth/
+│       │   ├── login.vue
+│       │   └── questionnaire.vue
+│       ├── buddy/
+│       │   ├── index.vue        ← Tab1 搭子首页
+│       │   ├── candidates.vue
+│       │   ├── detail.vue
+│       │   ├── invitations.vue
+│       │   └── career.vue
+│       ├── fun/
+│       │   └── index.vue        ← Tab2 趣玩（静态）
+│       ├── circle/
+│       │   ├── index.vue        ← Tab3 圈子首页
+│       │   ├── topic-detail.vue
+│       │   ├── poll-detail.vue
+│       │   ├── groups.vue
+│       │   └── group-chat.vue
+│       ├── market/
+│       │   ├── index.vue        ← Tab4 集市首页
+│       │   ├── lost-found/
+│       │   │   ├── index.vue
+│       │   │   ├── detail.vue
+│       │   │   └── publish.vue
+│       │   ├── second-hand/
+│       │   │   ├── index.vue
+│       │   │   ├── detail.vue
+│       │   │   └── publish.vue
+│       │   ├── part-time/
+│       │   │   ├── index.vue
+│       │   │   ├── detail.vue
+│       │   │   └── publish.vue
+│       │   └── barter/
+│       │       ├── index.vue
+│       │       ├── detail.vue
+│       │       └── publish.vue
+│       ├── profile/
+│       │   ├── index.vue        ← Tab5 我的
+│       │   ├── notifications.vue
+│       │   ├── collects.vue
+│       │   ├── member.vue
+│       │   ├── growth-report.vue
+│       │   ├── feedback.vue
+│       │   ├── notes.vue
+│       │   └── settings.vue
+│       └── im/
+│           └── chat.vue
+├── package.json
+├── tsconfig.json
+└── vite.config.ts
+```
+ 
+### 页面路由配置（pages.json）
+ 
+```json
+{
+  "pages": [
+    { "path": "pages/circle/index",   "style": { "navigationBarTitleText": "圈子" } },
+    { "path": "pages/market/index",   "style": { "navigationBarTitleText": "集市" } },
+    { "path": "pages/buddy/index",    "style": { "navigationBarTitleText": "搭子" } },
+    { "path": "pages/fun/index",      "style": { "navigationBarTitleText": "趣玩" } },
+    { "path": "pages/profile/index",  "style": { "navigationBarTitleText": "我的" } }
+  ],
+  "tabBar": {
+    "color": "#888780",
+    "selectedColor": "#FF7A00",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/circle/index",  "text": "圈子" },
+      { "pagePath": "pages/market/index",  "text": "集市" },
+      { "pagePath": "pages/buddy/index",   "text": "搭子" },
+      { "pagePath": "pages/fun/index",     "text": "趣玩" },
+      { "pagePath": "pages/profile/index", "text": "我的" }
+    ]
+  },
+  "subPackages": [
+    {
+      "root": "pages/auth",
+      "pages": ["login", "questionnaire"]
+    },
+    {
+      "root": "pages/buddy",
+      "pages": ["candidates", "detail", "invitations", "career"]
+    },
+    {
+      "root": "pages/circle",
+      "pages": ["topic-detail", "poll-detail", "groups", "group-chat"]
+    },
+    {
+      "root": "pages/market/lost-found",
+      "pages": ["index", "detail", "publish"]
+    },
+    {
+      "root": "pages/market/second-hand",
+      "pages": ["index", "detail", "publish"]
+    },
+    {
+      "root": "pages/market/part-time",
+      "pages": ["index", "detail", "publish"]
+    },
+    {
+      "root": "pages/market/barter",
+      "pages": ["index", "detail", "publish"]
+    },
+    {
+      "root": "pages/profile",
+      "pages": ["notifications", "collects", "member", "growth-report", "feedback", "notes", "settings"]
+    },
+    {
+      "root": "pages/im",
+      "pages": ["chat"]
+    }
+  ]
+}
+```
+ 
+### 全局样式变量（uni.scss）
+ 
+```scss
+// 与 Flutter theme.dart 保持一致
+$color-primary:    #FF7A00;   // 主色（活力橙）
+$color-secondary:  #5DCAA5;   // 辅色（绿）
+$color-danger:     #E24B4A;   // 强调（红）
+$color-bg:         #FFF8EC;   // 页面背景（暖米黄）
+$color-text:       #2C2C2A;   // 主文字
+$color-text-gray:  #888780;   // 次要文字
+$color-border:     #E8E6E0;   // 边框
+ 
+$radius-card:   24rpx;    // 卡片圆角（12px × 2）
+$radius-button: 16rpx;    // 按钮圆角（8px × 2）
+$radius-tag:    40rpx;    // 标签圆角（20px × 2）
+```
+ 
+> 小程序单位用 `rpx`，换算：`1px = 2rpx`
+ 
+### API 封装（api/request.ts）
+ 
+```typescript
+// api/request.ts
+const BASE_URL = 'http://8.138.190.48:8080'  // 开发环境
+ 
+export function request<T>(options: {
+  url: string
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  data?: object
+}): Promise<T> {
+  const token = uni.getStorageSync('access_token')
+  return new Promise((resolve, reject) => {
+    uni.request({
+      url: BASE_URL + options.url,
+      method: options.method || 'GET',
+      data: options.data,
+      header: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      success: (res: any) => {
+        if (res.data.success) {
+          resolve(res.data.data)
+        } else {
+          // 401 自动跳登录
+          if (res.statusCode === 401) {
+            uni.navigateTo({ url: '/pages/auth/login' })
+          }
+          reject(new Error(res.data.message))
+        }
+      },
+      fail: reject,
+    })
+  })
+}
+```
+ 
+### 登录流程（小程序特有）
+ 
+微信小程序优先使用微信一键登录：
+ 
+```typescript
+// 1. 获取微信 code
+wx.login({ success: ({ code }) => {
+  // 2. 传给后端换 JWT
+  request({ url: '/api/v1/auth/wechat/login', method: 'POST', data: { code } })
+    .then((res: any) => {
+      uni.setStorageSync('access_token', res.access_token)
+      if (res.is_new_user) {
+        uni.navigateTo({ url: '/pages/auth/questionnaire' })
+      } else {
+        uni.switchTab({ url: '/pages/buddy/index' })
+      }
+    })
+}})
+```
+ 
+### 状态管理（Pinia）
+ 
+```typescript
+// store/user.ts
+export const useUserStore = defineStore('user', {
+  state: () => ({
+    profile: null as UserProfile | null,
+    stats: null as UserStats | null,
+    isLoggedIn: false,
+  }),
+  actions: {
+    async fetchProfile() {
+      this.profile = await request({ url: '/api/v1/users/me' })
+    },
+  },
+})
+```
+ 
+### 小程序开发注意事项
+ 
+- **图片上传**：用 `uni.chooseImage` + `uni.uploadFile`，不用 axios
+- **WebSocket**：用 `uni.connectSocket` / `uni.onSocketMessage`
+- **本地存储**：用 `uni.setStorageSync` / `uni.getStorageSync`（对应 Flutter `flutter_secure_storage`）
+- **页面跳转**：Tab 页用 `uni.switchTab`，普通页用 `uni.navigateTo`，返回用 `uni.navigateBack`
+- **分包加载**：主包只放5个 Tab 首页，其他页面放 subPackages，减小主包体积
+- **rpx 换算**：所有尺寸乘以2，如 Flutter 的 `12.0` → 小程序的 `24rpx`
+ 
+### 核心依赖
+ 
+```json
+{
+  "dependencies": {
+    "pinia": "^2.1",
+    "@dcloudio/uni-app": "latest"
+  },
+  "devDependencies": {
+    "typescript": "^5.0",
+    "vite": "^5.0",
+    "@dcloudio/uni-cli-shared": "latest"
+  }
+}
+```
+ 
+---

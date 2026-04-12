@@ -10,18 +10,22 @@ final isLoggedInProvider = FutureProvider<bool>((ref) {
   return ref.watch(authRepositoryProvider).isLoggedIn();
 });
 
-// App 启动时恢复 session（从 Token 重新拉取用户信息）
+// App 启动时恢复 session
+// 只做本地 Token 检查（< 50ms），用户信息在后台静默拉取，不阻塞启动
 final appStartupProvider = FutureProvider<void>((ref) async {
   final isLoggedIn = await ref.watch(isLoggedInProvider.future);
   if (!isLoggedIn) return;
-  final user = await ref.read(authRepositoryProvider).getCurrentUser();
-  if (user != null) {
-    ref.read(currentUserProvider.notifier).state = user;
-  } else {
-    // Token 失效，清除登录态
-    await ref.read(authRepositoryProvider).logout();
-    ref.invalidate(isLoggedInProvider);
-  }
+
+  // 后台静默验证 Token + 拉取用户信息，不 await，不阻塞 Splash
+  ref.read(authRepositoryProvider).getCurrentUser().then((user) {
+    if (user != null) {
+      ref.read(currentUserProvider.notifier).state = user;
+    } else {
+      // Token 已失效，清除登录态并跳回登录页
+      ref.read(authRepositoryProvider).logout();
+      ref.invalidate(isLoggedInProvider);
+    }
+  });
 });
 
 // 登录 Notifier

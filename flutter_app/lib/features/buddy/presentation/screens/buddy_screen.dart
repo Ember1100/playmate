@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../shared/widgets/pm_image.dart';
 
 /// 搭子 Tab 首页
 class BuddyScreen extends StatelessWidget {
@@ -511,33 +512,7 @@ class _FeedCard extends StatelessWidget {
             child: ClipRRect(
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(16)),
-              child: Image.network(
-                data.imageUrl,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                errorBuilder: (ctx, error, stack) => Container(
-                  color: const Color(0xFFF5F5F5),
-                  child: const Center(
-                    child: Icon(Icons.image_outlined,
-                        color: Color(0xFFCCCCCC), size: 32),
-                  ),
-                ),
-                loadingBuilder: (_, child, progress) {
-                  if (progress == null) return child;
-                  return Container(
-                    color: const Color(0xFFF5F5F5),
-                    child: const Center(
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Color(0xFFFFB703)),
-                      ),
-                    ),
-                  );
-                },
-              ),
+              child: PmImage(data.imageUrl, fit: BoxFit.cover, width: double.infinity),
             ),
           ),
           // 信息

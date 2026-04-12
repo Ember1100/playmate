@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../shared/widgets/pm_image.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 数据模型
@@ -580,17 +581,7 @@ class _TopicCard extends StatelessWidget {
           // 封面图 — 固定 102×82，网络图片加载，失败时显示彩色占位
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: Image.network(
-              item.imageUrl,
-              width: 102,
-              height: 82,
-              fit: BoxFit.cover,
-              loadingBuilder: (_, child, progress) {
-                if (progress == null) return child;
-                return _imagePlaceholder(item.fallbackColor);
-              },
-              errorBuilder: (_, e, s) => _imagePlaceholder(item.fallbackColor),
-            ),
+            child: PmImage(item.imageUrl, width: 102, height: 82, fit: BoxFit.cover),
           ),
           const SizedBox(width: 12),
           // 内容区 — 不设固定高度，内容自然撑开

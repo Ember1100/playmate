@@ -1,0 +1,61 @@
+// ── 搭伴设计 Token（严格对齐原型色板）──────────────────────────────────
+
+// 主色（暖黄）
+$color-primary:       #FFB703;   // 核心主色
+$color-primary-light: #FFE8C0;   // 浅黄（头像背景/搜索框/图标背景）
+$color-primary-dark:  #FFA000;   // 深黄（强调）
+
+// 背景
+$color-bg:            #FFF9EF;   // 页面主体背景（搭子/趣玩/圈子）
+$color-bg-warm:       #FFE8C0;   // 暖黄背景（我的/集市/底栏）
+$color-bg-white:      #FFFFFF;   // 卡片/内容区
+$color-bg-gray:       #F7F7F8;   // Tab栏背景
+
+// 文字
+$color-text:          #222222;   // 主要文字
+$color-text-deep:     #333333;   // 深色文字
+$color-text-mid:      #666666;   // 中等文字
+$color-text-gray:     #999999;   // 次要/灰色文字
+$color-text-hint:     #BCBAB5;   // 占位提示
+
+// 边框
+$color-border:        #F0F0F0;   // 普通边框
+$color-border-warm:   #FFE0B2;   // 暖色边框（底栏、卡片）
+
+// 状态色
+$color-danger:        #E24B4A;
+$color-success:       #4CAF50;
+
+// 阴影
+$shadow-soft:         0 2px 8px rgba(0, 0, 0, 0.05);
+$shadow-card:         0 1px 4px rgba(0, 0, 0, 0.05);
+
+// 圆角（小程序 rpx，1px = 2rpx）
+$radius-card:         28rpx;     // 14px
+$radius-button:       20rpx;     // 10px
+$radius-tag:          40rpx;     // 20px / pill
+$radius-avatar:       50%;
+
+// 间距
+$spacing-xs: 8rpx;
+$spacing-sm: 16rpx;
+$spacing-md: 24rpx;
+$spacing-lg: 32rpx;
+$spacing-xl: 48rpx;
+
+// 字号（rpx）
+$font-xs:   22rpx;   // 11px
+$font-sm:   24rpx;   // 12px
+$font-base: 28rpx;   // 14px
+$font-md:   30rpx;   // 15px
+$font-lg:   32rpx;   // 16px
+$font-xl:   36rpx;   // 18px
+$font-2xl:  44rpx;   // 22px
+$font-3xl:  48rpx;   // 24px
+
+// ── uni 内置变量覆盖 ──────────────────────────────────────────────────
+$uni-color-primary:      $color-primary;
+$uni-text-color:         $color-text;
+$uni-text-color-grey:    $color-text-gray;
+$uni-bg-color:           $color-bg-white;
+$uni-border-color:       $color-border;

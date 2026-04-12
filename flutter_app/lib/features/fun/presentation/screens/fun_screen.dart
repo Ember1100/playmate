@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../shared/widgets/pm_image.dart';
 
 /// 趣玩 Tab（MVP 静态展示）
 class FunScreen extends StatefulWidget {
@@ -95,18 +96,7 @@ class _FunScreenState extends State<FunScreen> {
       child: Stack(
         children: [
           // Hero 背景图
-          Image.network(
-            'https://picsum.photos/id/1036/1200/600',
-            width: double.infinity,
-            height: double.infinity,
-            fit: BoxFit.cover,
-            loadingBuilder: (_, child, progress) {
-              if (progress == null) return child;
-              return Container(color: const Color(0xFFFFE8C0));
-            },
-            errorBuilder: (_, e, s) =>
-                Container(color: const Color(0xFFFFE8C0)),
-          ),
+          PmImage('https://picsum.photos/id/1036/1200/600', width: double.infinity, height: double.infinity),
           // 渐变遮罩（底部暗渐变）
           Positioned.fill(
             child: DecoratedBox(
@@ -373,16 +363,7 @@ class _ActivityCard extends StatelessWidget {
             child: ClipRRect(
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(8)),
-              child: Image.network(
-                'https://picsum.photos/id/${item.imageId}/280/210',
-                fit: BoxFit.cover,
-                loadingBuilder: (_, child, progress) {
-                  if (progress == null) return child;
-                  return Container(color: const Color(0xFFFFE8C0));
-                },
-                errorBuilder: (_, e, s) =>
-                    Container(color: const Color(0xFFFFE8C0)),
-              ),
+              child: PmImage('https://picsum.photos/id/${item.imageId}/280/210', fit: BoxFit.cover),
             ),
           ),
           // 标题
