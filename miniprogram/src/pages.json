@@ -25,6 +25,7 @@
     { "path": "pages/auth/register",      "style": { "navigationBarTitleText": "注册",    "navigationStyle": "custom" } },
     { "path": "pages/auth/questionnaire", "style": { "navigationBarTitleText": "完善资料" } },
 
+    { "path": "pages/buddy/search",       "style": { "navigationBarTitleText": "搜索搭子", "navigationStyle": "custom" } },
     { "path": "pages/buddy/candidates",   "style": { "navigationBarTitleText": "找搭子" } },
     { "path": "pages/buddy/detail",       "style": { "navigationBarTitleText": "搭子详情" } },
     { "path": "pages/buddy/invitations",  "style": { "navigationBarTitleText": "邀约管理" } },

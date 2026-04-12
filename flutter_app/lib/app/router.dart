@@ -7,6 +7,8 @@ import '../features/auth/presentation/screens/register_screen.dart';
 import '../features/auth/presentation/screens/questionnaire_screen.dart';
 import '../features/auth/providers/auth_provider.dart';
 import '../features/buddy/presentation/screens/buddy_screen.dart';
+import '../features/buddy/presentation/screens/buddy_search_screen.dart';
+import '../features/buddy/presentation/screens/buddy_user_detail_screen.dart';
 import '../features/circle/presentation/screens/circle_screen.dart';
 import '../features/fun/presentation/screens/fun_screen.dart';
 import '../features/im/presentation/screens/chat_screen.dart';
@@ -174,6 +176,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               path:    '/buddy',
               builder: (_, _) => const BuddyScreen(),
               routes: [
+                GoRoute(path: 'search',      builder: (_, _) => const BuddySearchScreen()),
+                GoRoute(path: 'user/:id',    builder: (_, state) => BuddyUserDetailScreen(userId: state.pathParameters['id'])),
                 GoRoute(path: 'candidates',  builder: (_, _) => const PmPlaceholderScreen(title: '搭子推荐')),
                 GoRoute(path: 'invitations', builder: (_, _) => const PmPlaceholderScreen(title: '邀约管理')),
                 GoRoute(path: 'career',      builder: (_, _) => const PmPlaceholderScreen(title: '职业搭子阵地')),

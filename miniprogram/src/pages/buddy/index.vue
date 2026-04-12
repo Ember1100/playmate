@@ -27,10 +27,10 @@
       </view>
 
       <!-- Search -->
-      <view class="buddy__search-wrap">
+      <view class="buddy__search-wrap" @click="uni.navigateTo({url:'/pages/buddy/search'})">
         <view class="buddy__search">
           <text class="buddy__search-icon">🔍</text>
-          <input class="buddy__search-input" placeholder="请输入关键词" placeholder-style="color:#9e9e9e" />
+          <text class="buddy__search-hint">请输入关键词</text>
         </view>
       </view>
 
@@ -65,7 +65,7 @@
       </view>
 
       <!-- 标签横滚 -->
-      <scroll-view class="buddy__tags" scroll-x>
+      <scroll-view class="buddy__tags" scroll-x :show-scrollbar="false">
         <view class="buddy__tags-inner">
           <view class="buddy__tag" v-for="tag in tags" :key="tag.label"
             @click="uni.navigateTo({url:'/pages/buddy/candidates?tag='+tag.label})">
@@ -236,12 +236,9 @@ const feedItems = [
     font-size: $font-lg;
     opacity: 0.6;
   }
-  &__search-input {
-    flex: 1;
+  &__search-hint {
     font-size: $font-base;
-    color: $color-text;
-    border: none;
-    background: transparent;
+    color: #9e9e9e;
   }
 
   // ── Category Grid ────────────────────────────────────────

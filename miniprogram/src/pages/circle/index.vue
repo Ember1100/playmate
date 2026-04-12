@@ -347,12 +347,14 @@ const chatGroups = [
     padding: 26rpx;
     margin-bottom: 28rpx;
     display: flex;
+    align-items: stretch;
     gap: 24rpx;
     box-shadow: 0 6rpx 24rpx rgba(0,0,0,0.05);
     border: 2rpx solid $color-border;
   }
   &__topic-cover {
-    width: 204rpx; height: 164rpx;
+    width: 180rpx;
+    height: 164rpx;
     border-radius: 20rpx;
     overflow: hidden;
     background: #eee;
@@ -360,30 +362,51 @@ const chatGroups = [
   }
   &__topic-content {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    overflow: hidden;
   }
   &__topic-title {
     font-size: $font-md;
     font-weight: 600;
     color: $color-text;
     margin-bottom: 10rpx;
-    line-height: 1.35;
-    display: block;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
   }
   &__topic-desc {
     font-size: $font-sm;
     color: #777;
-    line-height: 1.45;
-    display: block;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+    flex: 1;
   }
   &__topic-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-top: 16rpx;
+    flex-shrink: 0;
   }
-  &__topic-meta { font-size: $font-xs; color: #999; }
+  &__topic-meta {
+    font-size: $font-xs;
+    color: #999;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 16rpx;
+  }
   &__join-btn {
     background: $color-primary;
     color: #fff;
@@ -393,6 +416,8 @@ const chatGroups = [
     font-size: $font-sm;
     font-weight: 500;
     box-shadow: 0 4rpx 12rpx rgba(255,183,3,0.25);
+    flex-shrink: 0;
+    line-height: 1.5;
     &::after { border: none; }
   }
 

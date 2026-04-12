@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../shared/widgets/pm_image.dart';
 
+
 /// 搭子 Tab 首页
 class BuddyScreen extends StatelessWidget {
   const BuddyScreen({super.key});
@@ -17,7 +18,7 @@ class BuddyScreen extends StatelessWidget {
           slivers: [
             SliverToBoxAdapter(child: _buildHeader()),
             SliverToBoxAdapter(child: _buildBanner()),
-            SliverToBoxAdapter(child: _buildSearchBar()),
+            SliverToBoxAdapter(child: _buildSearchBar(context)),
             SliverToBoxAdapter(child: _buildCategoryGrid(context)),
             SliverToBoxAdapter(child: _buildTagRow()),
             SliverToBoxAdapter(child: _buildFeedGrid()),
@@ -157,22 +158,25 @@ class BuddyScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-      height: 42,
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFE8C0),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: const Row(
-        children: [
-          SizedBox(width: 14),
-          Icon(Icons.search_rounded, color: Color(0xFF888888), size: 18),
-          SizedBox(width: 8),
-          Text('请输入关键词',
-              style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
-        ],
+  Widget _buildSearchBar(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.push('/buddy/search'),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+        height: 42,
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFE8C0),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(width: 14),
+            Icon(Icons.search_rounded, color: Color(0xFF888888), size: 18),
+            SizedBox(width: 8),
+            Text('请输入关键词',
+                style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
+          ],
+        ),
       ),
     );
   }
@@ -493,7 +497,9 @@ class _FeedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: () => context.push('/buddy/user/mock_feed'),
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -548,6 +554,7 @@ class _FeedCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }
