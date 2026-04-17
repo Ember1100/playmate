@@ -583,7 +583,7 @@ class _BuddyScreenState extends State<BuddyScreen> with WidgetsBindingObserver {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10,
-          childAspectRatio: 0.72,
+          childAspectRatio: 0.47,
           children: people.map((p) => _BuddyPersonCard(data: p)).toList(),
         ),
       ),
@@ -836,71 +836,129 @@ class _GatherCard extends StatelessWidget {
   final VoidCallback onTap;
 
   String _fmt(DateTime dt) {
-    return '${dt.year}年${dt.month.toString().padLeft(2, '0')}月'
-        '${dt.day.toString().padLeft(2, '0')}日 '
-        '${dt.hour.toString().padLeft(2, '0')}:'
-        '${dt.minute.toString().padLeft(2, '0')}:'
-        '${dt.second.toString().padLeft(2, '0')}';
+    final mo = dt.month.toString().padLeft(2, '0');
+    final d  = dt.day.toString().padLeft(2, '0');
+    final h  = dt.hour.toString().padLeft(2, '0');
+    final mi = dt.minute.toString().padLeft(2, '0');
+    return '${dt.year}年${mo}月${d}日 $h:$mi';
   }
 
   @override
   Widget build(BuildContext context) {
+    final isFull = item.joinedCount >= item.totalCount;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), boxShadow: const [BoxShadow(blurRadius: 8, color: Color(0x0D000000), offset: Offset(0, 2))]),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFEDE5DA), width: 0.5),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(child: Text(item.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF222222), height: 1.4))),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: item.themeColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10), border: Border.all(color: item.themeColor.withValues(alpha: 0.4))),
-                child: Text(item.theme, style: TextStyle(fontSize: 11, color: item.themeColor, fontWeight: FontWeight.w600)),
-              ),
-            ]),
-            const SizedBox(height: 10),
-            Row(children: [
-              const Icon(Icons.location_on_outlined, size: 13, color: Color(0xFF999999)),
-              const SizedBox(width: 4),
-              Expanded(child: Text(item.location, style: const TextStyle(fontSize: 12, color: Color(0xFF888888)), maxLines: 1, overflow: TextOverflow.ellipsis)),
-            ]),
-            const SizedBox(height: 6),
-            Row(children: [
-              const Icon(Icons.play_circle_outline, size: 13, color: Color(0xFF5DCAA5)),
-              const SizedBox(width: 4),
-              Text('开始：${_fmt(item.startTime)}', style: const TextStyle(fontSize: 12, color: Color(0xFF555555))),
-            ]),
-            const SizedBox(height: 3),
-            Row(children: [
-              const Icon(Icons.stop_circle_outlined, size: 13, color: Color(0xFFE24B4A)),
-              const SizedBox(width: 4),
-              Text('结束：${_fmt(item.endTime)}', style: const TextStyle(fontSize: 12, color: Color(0xFF555555))),
-            ]),
-            const SizedBox(height: 10),
-            Row(children: [
-              SizedBox(
-                height: 28, width: item.avatars.length * 20.0 + 8,
-                child: Stack(children: List.generate(item.avatars.length, (i) {
-                  return Positioned(left: i * 20.0, child: Container(width: 28, height: 28, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)), child: ClipOval(child: PmImage(item.avatars[i], width: 28, height: 28, fit: BoxFit.cover))));
-                })),
-              ),
-              const SizedBox(width: 8),
-              Text('${item.joinedCount}/${item.totalCount} 人参加', style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
-              const Spacer(),
-              GestureDetector(
-                onTap: () {},
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  decoration: BoxDecoration(color: const Color(0xFFFF7A00), borderRadius: BorderRadius.circular(16)),
-                  child: const Text('参加', style: TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600)),
+            // ── 90px image strip ──────────────────────────────────────────
+            SizedBox(
+              height: 90,
+              child: Stack(fit: StackFit.expand, children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [item.themeColor.withAlpha(210), item.themeColor.withAlpha(130)],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ]),
+                // Dark overlay
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: Container(color: Colors.black.withAlpha(56)),
+                ),
+                // Category badge — bottom left
+                Positioned(
+                  bottom: 10, left: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: item.themeColor.withAlpha(230),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(item.theme, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white)),
+                  ),
+                ),
+              ]),
+            ),
+            // ── Body ─────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(13, 12, 13, 13),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(item.title,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF222222), height: 1.35)),
+                const SizedBox(height: 8),
+                // Location
+                Row(children: [
+                  const Icon(Icons.location_on_outlined, size: 12, color: Color(0xFFC8BFB5)),
+                  const SizedBox(width: 5),
+                  Expanded(child: Text(item.location, style: const TextStyle(fontSize: 12, color: Color(0xFF888888)), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                ]),
+                const SizedBox(height: 4),
+                // Start time
+                Row(children: [
+                  const Icon(Icons.schedule_rounded, size: 12, color: Color(0xFF4ADE80)),
+                  const SizedBox(width: 5),
+                  const Text('开始', style: TextStyle(fontSize: 12, color: Color(0xFF16A34A))),
+                  const SizedBox(width: 3),
+                  Text(_fmt(item.startTime), style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
+                ]),
+                const SizedBox(height: 4),
+                // End time
+                Row(children: [
+                  const Icon(Icons.cancel_outlined, size: 12, color: Color(0xFFF87171)),
+                  const SizedBox(width: 5),
+                  const Text('结束', style: TextStyle(fontSize: 12, color: Color(0xFFDC2626))),
+                  const SizedBox(width: 3),
+                  Text(_fmt(item.endTime), style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
+                ]),
+                const SizedBox(height: 10),
+                // Footer
+                Row(children: [
+                  // Avatar stack (24px, -6px overlap)
+                  SizedBox(
+                    height: 24,
+                    width: item.avatars.length * 18.0 + 6,
+                    child: Stack(children: List.generate(item.avatars.length, (i) => Positioned(
+                      left: i * 18.0,
+                      child: Container(
+                        width: 24, height: 24,
+                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                        child: ClipOval(child: PmImage(item.avatars[i], width: 24, height: 24, fit: BoxFit.cover)),
+                      ),
+                    ))),
+                  ),
+                  const SizedBox(width: 10),
+                  Text('${item.joinedCount}/${item.totalCount} 人参加', style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: isFull ? null : () {},
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: isFull ? const Color(0xFFF0ECE6) : const Color(0xFFFF8C42),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text('参加', style: TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w500,
+                        color: isFull ? const Color(0xFFC8BFB5) : Colors.white,
+                      )),
+                    ),
+                  ),
+                ]),
+              ]),
+            ),
           ],
         ),
       ),
@@ -931,37 +989,72 @@ class _BuddyPersonCard extends StatelessWidget {
     return GestureDetector(
       onTap: () => context.push('/buddy/user/mock_person'),
       child: Container(
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: const [BoxShadow(blurRadius: 8, color: Color(0x0D000000), offset: Offset(0, 2))]),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFEDE5DA), width: 0.5),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
+            // ── 3:4 cover image ──────────────────────────────────────────
+            AspectRatio(
+              aspectRatio: 3 / 4,
               child: Stack(fit: StackFit.expand, children: [
-                ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(16)), child: PmImage(data.avatar, fit: BoxFit.cover, width: double.infinity)),
-                Positioned(top: 8, left: 8, child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: const Color(0xFFFF7A00).withValues(alpha: 0.9), borderRadius: BorderRadius.circular(10)),
-                  child: Text(data.tag, style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600)),
-                )),
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: PmImage(data.avatar, fit: BoxFit.cover, width: double.infinity),
+                ),
+                Positioned(
+                  top: 9, left: 9,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF8C42).withAlpha(230),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(data.tag, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Colors.white)),
+                  ),
+                ),
               ]),
             ),
+            // ── Body ─────────────────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.fromLTRB(11, 10, 11, 12),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // Name + age
                 Row(children: [
-                  Text(data.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF222222))),
-                  const SizedBox(width: 6),
-                  Text('${data.city} · ${data.age}岁', style: const TextStyle(fontSize: 11, color: Color(0xFF999999))),
+                  Text(data.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF222222))),
+                  const SizedBox(width: 5),
+                  Text('${data.age}岁', style: const TextStyle(fontSize: 12, color: Color(0xFF999999))),
                 ]),
-                const SizedBox(height: 4),
-                Text(data.desc, style: const TextStyle(fontSize: 11, color: Color(0xFF888888)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 3),
+                // Location
+                Row(children: [
+                  const Icon(Icons.location_on_outlined, size: 10, color: Color(0xFFC8BFB5)),
+                  const SizedBox(width: 3),
+                  Text(data.city, style: const TextStyle(fontSize: 11, color: Color(0xFFC8BFB5))),
+                ]),
                 const SizedBox(height: 6),
+                // Description (2 lines)
+                Text(data.desc,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF999999), height: 1.45),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 9),
+                // Invite button
                 SizedBox(
-                  width: double.infinity, height: 28,
-                  child: ElevatedButton(
+                  width: double.infinity,
+                  child: TextButton(
                     onPressed: () {},
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF7A00), padding: EdgeInsets.zero, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                    child: const Text('邀约', style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
+                    style: TextButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF8C42),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('邀约', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                   ),
                 ),
               ]),
