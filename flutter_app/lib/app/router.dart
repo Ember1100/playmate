@@ -12,6 +12,8 @@ import '../features/buddy/presentation/screens/buddy_user_detail_screen.dart';
 import '../features/circle/presentation/screens/circle_screen.dart';
 import '../features/fun/presentation/screens/fun_screen.dart';
 import '../features/im/presentation/screens/chat_screen.dart';
+import '../features/im/presentation/screens/group_chat_screen.dart';
+import '../features/im/presentation/screens/im_screen.dart';
 import '../features/market/presentation/screens/market_screen.dart';
 import '../features/profile/presentation/screens/profile_screen.dart';
 import '../shared/widgets/pm_bottom_nav.dart';
@@ -96,7 +98,20 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
 
-      // ── 主 Shell（5 个 Tab）──────────────────────────────────────────────
+      // ── 群聊（Shell 之外，全屏）──────────────────────────────────────────
+      GoRoute(
+        path: '/im/group/:groupId',
+        builder: (_, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return GroupChatScreen(
+            groupId:     state.pathParameters['groupId']!,
+            groupName:   extra?['groupName'] as String? ?? '群聊',
+            memberCount: extra?['memberCount'] as int?,
+          );
+        },
+      ),
+
+      // ── 主 Shell（6 个 Tab）──────────────────────────────────────────────
       StatefulShellRoute.indexedStack(
         builder: (_, _, shell) => PmBottomNav(shell: shell),
         branches: [
@@ -185,7 +200,15 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ]),
 
-          // Tab 3：趣玩
+          // Tab 3：消息
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path:    '/im',
+              builder: (_, _) => const ImScreen(),
+            ),
+          ]),
+
+          // Tab 4：趣玩
           StatefulShellBranch(routes: [
             GoRoute(
               path:    '/fun',
@@ -193,7 +216,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ]),
 
-          // Tab 4：我的
+          // Tab 5：我的
           StatefulShellBranch(routes: [
             GoRoute(
               path:    '/profile',

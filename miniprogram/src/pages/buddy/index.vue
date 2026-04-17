@@ -61,10 +61,6 @@
 
       <!-- 搭子局 Tab 栏 + 发起按钮 -->
       <view class="gather__topbar">
-        <view class="gather__topbar-tab gather__topbar-tab--active">
-          <text class="gather__topbar-label gather__topbar-label--active">搭子局</text>
-          <view class="gather__topbar-indicator" />
-        </view>
         <view style="flex:1" />
         <view class="gather__topbar-btn" @click="showPublish = true">
           <text class="gather__topbar-btn-icon">+</text>
@@ -181,8 +177,8 @@
     </scroll-view>
 
     <!-- 搭子局详情弹窗 -->
-    <view v-if="showDetail && detailItem" class="detail-mask" @click="showDetail = false">
-      <view class="detail-sheet" @click.stop>
+    <view v-if="showDetail && detailItem" class="detail-mask" @click="showDetail = false" @touchmove.stop>
+      <view class="detail-sheet" @click.stop @touchmove.stop>
         <view class="detail-sheet__handle" />
         <!-- 标题 -->
         <view class="detail-sheet__header">
@@ -235,16 +231,53 @@
     </view>
 
     <!-- 发起搭子局弹窗 -->
-    <view v-if="showPublish" class="detail-mask" @click="showPublish = false">
-      <view class="publish-sheet" @click.stop>
-        <view class="detail-sheet__handle" />
-        <text class="publish-sheet__title">发起搭子局</text>
+    <view v-if="showPublish" class="detail-mask" @click="showPublish = false" @touchmove.stop>
+      <view class="publish-sheet" @click.stop @touchmove.stop>
+        <!-- 标题栏 -->
+        <view class="publish-sheet__header">
+          <text class="publish-sheet__title">发起搭子局</text>
+          <text class="publish-sheet__close" @click="showPublish = false">✕</text>
+        </view>
         <view class="detail-sheet__divider" />
-        <scroll-view scroll-y class="publish-sheet__body">
-          <view class="publish-sheet__field" v-for="f in publishFields" :key="f.label">
+        <scroll-view scroll-y class="publish-sheet__body" @touchmove.stop>
+          <!-- 普通文本字段 -->
+          <view class="publish-sheet__field" v-for="f in publishTextFields" :key="f.label">
             <text class="publish-sheet__label">{{ f.label }}</text>
-            <input class="publish-sheet__input" :placeholder="f.hint" :disabled="f.readOnly" />
+            <input class="publish-sheet__input" :placeholder="f.hint" :type="f.inputType ?? 'text'" />
           </view>
+
+          <!-- 开始时间 -->
+          <view class="publish-sheet__field">
+            <text class="publish-sheet__label">开始时间</text>
+            <picker mode="datetime" :value="startTimeRaw" @change="onStartTimeChange">
+              <view class="publish-sheet__picker">
+                <text :class="startTimeDisplay ? 'publish-sheet__picker-val' : 'publish-sheet__picker-hint'">
+                  {{ startTimeDisplay || '请选择开始时间' }}
+                </text>
+                <text class="publish-sheet__picker-arrow">›</text>
+              </view>
+            </picker>
+          </view>
+
+          <!-- 结束时间 -->
+          <view class="publish-sheet__field">
+            <text class="publish-sheet__label">结束时间</text>
+            <picker mode="datetime" :value="endTimeRaw" @change="onEndTimeChange">
+              <view class="publish-sheet__picker">
+                <text :class="endTimeDisplay ? 'publish-sheet__picker-val' : 'publish-sheet__picker-hint'">
+                  {{ endTimeDisplay || '请选择结束时间' }}
+                </text>
+                <text class="publish-sheet__picker-arrow">›</text>
+              </view>
+            </picker>
+          </view>
+
+          <!-- 人数 + 主题 -->
+          <view class="publish-sheet__field" v-for="f in publishTailFields" :key="f.label">
+            <text class="publish-sheet__label">{{ f.label }}</text>
+            <input class="publish-sheet__input" :placeholder="f.hint" :type="f.inputType ?? 'text'" />
+          </view>
+
           <view class="publish-sheet__submit" @click="showPublish = false">
             <text>发布搭子局</text>
           </view>
@@ -379,14 +412,46 @@ const showDetail = ref(false)
 const detailItem = ref<GatherItem | null>(null)
 const showPublish = ref(false)
 
-const publishFields = [
-  { label: '活动名称', hint: '给你的搭子局起个名字', readOnly: false },
-  { label: '活动地点', hint: '输入详细地址', readOnly: false },
-  { label: '开始时间', hint: '2026年04月19日 18:30:00', readOnly: true },
-  { label: '结束时间', hint: '2026年04月19日 21:00:00', readOnly: true },
-  { label: '人数上限', hint: '最多几人参加（2-50）', readOnly: false },
-  { label: '活动主题', hint: '饭搭子 / 观影搭子 / 其他...', readOnly: false },
+// 时间前两个普通字段
+const publishTextFields = [
+  { label: '活动名称', hint: '给你的搭子局起个名字' },
+  { label: '活动地点', hint: '输入详细地址' },
 ]
+// 时间后两个普通字段
+const publishTailFields = [
+  { label: '人数上限', hint: '最多几人参加（2-50）', inputType: 'number' },
+  { label: '活动主题', hint: '饭搭子 / 观影搭子 / 其他...' },
+]
+
+// picker 的 value 格式：YYYY-MM-DD HH:mm
+const startTimeRaw = ref('')
+const endTimeRaw   = ref('')
+
+function fmtPickerVal(raw: string): string {
+  // raw: "2026-04-19 18:30" → "2026年04月月19日 18:30"
+  if (!raw) return ''
+  const [datePart, timePart] = raw.split(' ')
+  const [y, m, d] = datePart.split('-')
+  return `${y}年${m}月${d}日 ${timePart}`
+}
+
+const startTimeDisplay = computed(() => fmtPickerVal(startTimeRaw.value))
+const endTimeDisplay   = computed(() => fmtPickerVal(endTimeRaw.value))
+
+function onStartTimeChange(e: any) {
+  startTimeRaw.value = e.detail.value
+  // 结束时间若早于开始时间，自动顺延 2 小时
+  if (endTimeRaw.value && endTimeRaw.value < startTimeRaw.value) {
+    const d = new Date(startTimeRaw.value.replace(' ', 'T'))
+    d.setHours(d.getHours() + 2)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    endTimeRaw.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+}
+
+function onEndTimeChange(e: any) {
+  endTimeRaw.value = e.detail.value
+}
 </script>
 
 <style lang="scss" scoped>
@@ -635,8 +700,16 @@ const publishFields = [
   width: 100%; max-height: 85vh; background: #fff;
   border-radius: 40rpx 40rpx 0 0; display: flex; flex-direction: column;
 
+  &__header {
+    display: flex; align-items: center; justify-content: center;
+    position: relative; padding: 32rpx 32rpx 0;
+  }
   &__title {
-    text-align: center; font-size: 34rpx; font-weight: 700; color: #222; padding: 32rpx 0 0;
+    font-size: 34rpx; font-weight: 700; color: #222;
+  }
+  &__close {
+    position: absolute; right: 32rpx; top: 50%; transform: translateY(-50%);
+    font-size: 36rpx; color: #999; padding: 8rpx;
   }
   &__body { padding: 32rpx 40rpx; overflow-y: auto; flex: 1; }
   &__field { margin-bottom: 32rpx; }
@@ -645,6 +718,13 @@ const publishFields = [
     width: 100%; height: 88rpx; background: #f7f7f7; border-radius: 20rpx;
     padding: 0 28rpx; font-size: 28rpx; color: #333;
   }
+  &__picker {
+    width: 100%; height: 88rpx; background: #f7f7f7; border-radius: 20rpx;
+    padding: 0 28rpx; display: flex; align-items: center; justify-content: space-between;
+  }
+  &__picker-val  { font-size: 28rpx; color: #333; flex: 1; }
+  &__picker-hint { font-size: 28rpx; color: #BBBBBB; flex: 1; }
+  &__picker-arrow { font-size: 36rpx; color: #BBBBBB; }
   &__submit {
     width: 100%; height: 96rpx; background: #FF7A00; border-radius: 24rpx;
     display: flex; align-items: center; justify-content: center;

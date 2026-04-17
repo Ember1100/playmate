@@ -40,6 +40,78 @@ final conversationsProvider =
   ConversationsNotifier.new,
 );
 
+// ── Group sessions provider ───────────────────────────────────────────────────
+
+class GroupSessionsNotifier extends AsyncNotifier<List<GroupSession>> {
+  @override
+  Future<List<GroupSession>> build() =>
+      ref.read(imRepositoryProvider).getGroupSessions();
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(imRepositoryProvider).getGroupSessions(),
+    );
+  }
+}
+
+final groupSessionsProvider =
+    AsyncNotifierProvider<GroupSessionsNotifier, List<GroupSession>>(
+  GroupSessionsNotifier.new,
+);
+
+// ── Notifications provider ────────────────────────────────────────────────────
+
+class NotificationsNotifier extends AsyncNotifier<List<AppNotification>> {
+  @override
+  Future<List<AppNotification>> build() =>
+      ref.read(imRepositoryProvider).getNotifications();
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(imRepositoryProvider).getNotifications(),
+    );
+  }
+
+  void markRead(String id) {
+    state.whenData((list) {
+      state = AsyncData(list.map((n) {
+        return n.id == id ? n.copyWith(isRead: true) : n;
+      }).toList());
+    });
+    // fire-and-forget 通知后端
+    ref.read(imRepositoryProvider).markNotificationRead(id);
+  }
+}
+
+final notificationsProvider =
+    AsyncNotifierProvider<NotificationsNotifier, List<AppNotification>>(
+  NotificationsNotifier.new,
+);
+
+// ── Group chat provider ───────────────────────────────────────────────────────
+
+class GroupChatNotifier extends FamilyAsyncNotifier<List<GroupMessage>, String> {
+  @override
+  Future<List<GroupMessage>> build(String arg) =>
+      ref.read(imRepositoryProvider).getGroupMessages(arg);
+
+  void addMessage(GroupMessage msg) {
+    state.whenData((list) {
+      if (list.any((m) => m.id == msg.id)) return;
+      state = AsyncData([...list, msg]);
+    });
+  }
+}
+
+final groupChatProvider =
+    AsyncNotifierProviderFamily<GroupChatNotifier, List<GroupMessage>, String>(
+  GroupChatNotifier.new,
+);
+
+// ── Messages list (read-only) ─────────────────────────────────────────────────
+
 // Messages list (read-only)
 final messagesProvider =
     FutureProvider.family<List<Message>, String>((ref, conversationId) async {

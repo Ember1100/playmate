@@ -13,6 +13,10 @@
       "style": { "navigationBarTitleText": "搭子", "navigationBarBackgroundColor": "#FFFFFF", "navigationBarTextStyle": "black" }
     },
     {
+      "path": "pages/im/index",
+      "style": { "navigationBarTitleText": "消息", "navigationBarBackgroundColor": "#FFFFFF", "navigationBarTextStyle": "black" }
+    },
+    {
       "path": "pages/fun/index",
       "style": { "navigationBarTitleText": "趣玩", "navigationBarBackgroundColor": "#FFFFFF", "navigationBarTextStyle": "black" }
     },
@@ -91,6 +95,7 @@
       { "pagePath": "pages/circle/index",  "text": "圈子" },
       { "pagePath": "pages/market/index",  "text": "集市" },
       { "pagePath": "pages/buddy/index",   "text": "搭子" },
+      { "pagePath": "pages/im/index",      "text": "消息" },
       { "pagePath": "pages/fun/index",     "text": "趣玩" },
       { "pagePath": "pages/profile/index", "text": "我的" }
     ]

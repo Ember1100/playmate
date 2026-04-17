@@ -5,18 +5,19 @@ import '../../app/theme.dart';
 /// 底部导航 Shell（固定高度 98px + 安全区域）
 ///
 /// Tab 顺序（来自 UI 设计稿）：
-///   0 圈子 | 1 集市 | 2 搭子 | 3 趣玩 | 4 我的
+///   0 圈子 | 1 集市 | 2 搭子 | 3 消息 | 4 趣玩 | 5 我的
 class PmBottomNav extends StatelessWidget {
   const PmBottomNav({super.key, required this.shell});
 
   final StatefulNavigationShell shell;
 
   static const _tabs = [
-    _TabItem(icon: Icons.forum_outlined,         activeIcon: Icons.forum_rounded,         label: '圈子'),
-    _TabItem(icon: Icons.storefront_outlined,    activeIcon: Icons.storefront_rounded,    label: '集市'),
-    _TabItem(icon: Icons.people_alt_outlined,    activeIcon: Icons.people_alt_rounded,    label: '搭子'),
-    _TabItem(icon: Icons.celebration_outlined,   activeIcon: Icons.celebration_rounded,   label: '趣玩'),
-    _TabItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded,        label: '我的'),
+    _TabItem(icon: Icons.forum_outlined,          activeIcon: Icons.forum_rounded,          label: '圈子'),
+    _TabItem(icon: Icons.storefront_outlined,     activeIcon: Icons.storefront_rounded,     label: '集市'),
+    _TabItem(icon: Icons.people_alt_outlined,     activeIcon: Icons.people_alt_rounded,     label: '搭子'),
+    _TabItem(icon: Icons.chat_bubble_outline,     activeIcon: Icons.chat_bubble_rounded,    label: '消息'),
+    _TabItem(icon: Icons.celebration_outlined,    activeIcon: Icons.celebration_rounded,    label: '趣玩'),
+    _TabItem(icon: Icons.person_outline_rounded,  activeIcon: Icons.person_rounded,         label: '我的'),
   ];
 
   void _onTap(int index) {

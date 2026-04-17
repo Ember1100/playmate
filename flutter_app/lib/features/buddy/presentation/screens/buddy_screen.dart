@@ -220,7 +220,6 @@ class _BuddyScreenState extends State<BuddyScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          _TopTab(label: '搭子局', selected: _topTab == 0, onTap: () => setState(() { _topTab = 0; _subTagIndex = -1; })),
           const Spacer(),
           if (_topTab == 0)
             GestureDetector(
@@ -384,7 +383,10 @@ class _BuddyScreenState extends State<BuddyScreen> {
 
   void _showPublishDialog() {
     showModalBottomSheet(
-      context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+      context: context,
+      isScrollControlled: true,
+      enableDrag: false,          // 禁止下滑手势关闭，防止事件穿透到底层页面
+      backgroundColor: Colors.transparent,
       builder: (_) => const _PublishGatherSheet(),
     );
   }
@@ -914,8 +916,66 @@ class _DetailRow extends StatelessWidget {
 //  发起搭子局弹窗
 // ═════════════════════════════════════════════════════════════════════════════
 
-class _PublishGatherSheet extends StatelessWidget {
+class _PublishGatherSheet extends StatefulWidget {
   const _PublishGatherSheet();
+
+  @override
+  State<_PublishGatherSheet> createState() => _PublishGatherSheetState();
+}
+
+class _PublishGatherSheetState extends State<_PublishGatherSheet> {
+  DateTime? _startTime;
+  DateTime? _endTime;
+
+  static String _fmt(DateTime dt) {
+    String p(int n) => n.toString().padLeft(2, '0');
+    return '${dt.year}年${p(dt.month)}月${p(dt.day)}日 ${p(dt.hour)}:${p(dt.minute)}';
+  }
+
+  Future<void> _pickTime(bool isStart) async {
+    final now    = DateTime.now();
+    final initial = isStart ? (_startTime ?? now) : (_endTime ?? (_startTime ?? now).add(const Duration(hours: 2)));
+
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+      locale: const Locale('zh'),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: Color(0xFFFF7A00)),
+        ),
+        child: child!,
+      ),
+    );
+    if (date == null || !mounted) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: Color(0xFFFF7A00)),
+        ),
+        child: child!,
+      ),
+    );
+    if (time == null || !mounted) return;
+
+    final result = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    setState(() {
+      if (isStart) {
+        _startTime = result;
+        // 结束时间若早于开始时间，自动顺延 2 小时
+        if (_endTime != null && _endTime!.isBefore(result)) {
+          _endTime = result.add(const Duration(hours: 2));
+        }
+      } else {
+        _endTime = result;
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -924,11 +984,23 @@ class _PublishGatherSheet extends StatelessWidget {
       decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       child: Column(
         children: [
-          const SizedBox(height: 12),
-          Container(width: 36, height: 4, decoration: BoxDecoration(color: const Color(0xFFDDDDDD), borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 16),
-          const Text('发起搭子局', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF222222))),
-          const Divider(height: 24),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 12, 4, 0),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                const Text('发起搭子局', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF222222))),
+                Positioned(
+                  right: 0,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, size: 20, color: Color(0xFF999999)),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 16),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -937,11 +1009,21 @@ class _PublishGatherSheet extends StatelessWidget {
                 const SizedBox(height: 16),
                 _FormField(label: '活动地点', hint: '输入详细地址'),
                 const SizedBox(height: 16),
-                _FormField(label: '开始时间', hint: '2026年04月19日 18:30:00', readOnly: true),
+                _DateTimeTile(
+                  label: '开始时间',
+                  value: _startTime != null ? _fmt(_startTime!) : null,
+                  hint: '请选择开始时间',
+                  onTap: () => _pickTime(true),
+                ),
                 const SizedBox(height: 16),
-                _FormField(label: '结束时间', hint: '2026年04月19日 21:00:00', readOnly: true),
+                _DateTimeTile(
+                  label: '结束时间',
+                  value: _endTime != null ? _fmt(_endTime!) : null,
+                  hint: '请选择结束时间',
+                  onTap: () => _pickTime(false),
+                ),
                 const SizedBox(height: 16),
-                _FormField(label: '人数上限', hint: '最多几人参加（2-50）'),
+                _FormField(label: '人数上限', hint: '最多几人参加（2-50）', keyboardType: TextInputType.number),
                 const SizedBox(height: 16),
                 _FormField(label: '活动主题', hint: '饭搭子 / 观影搭子 / 其他...'),
                 const SizedBox(height: 32),
@@ -963,11 +1045,46 @@ class _PublishGatherSheet extends StatelessWidget {
   }
 }
 
-class _FormField extends StatelessWidget {
-  const _FormField({required this.label, required this.hint, this.readOnly = false});
+class _DateTimeTile extends StatelessWidget {
+  const _DateTimeTile({required this.label, required this.hint, this.value, required this.onTap});
   final String label;
   final String hint;
-  final bool readOnly;
+  final String? value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF333333))),
+      const SizedBox(height: 8),
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 50,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(color: const Color(0xFFF7F7F7), borderRadius: BorderRadius.circular(10)),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  value ?? hint,
+                  style: TextStyle(fontSize: 14, color: value != null ? const Color(0xFF333333) : const Color(0xFFBBBBBB)),
+                ),
+              ),
+              const Icon(Icons.chevron_right, size: 18, color: Color(0xFFBBBBBB)),
+            ],
+          ),
+        ),
+      ),
+    ]);
+  }
+}
+
+class _FormField extends StatelessWidget {
+  const _FormField({required this.label, required this.hint, this.keyboardType});
+  final String label;
+  final String hint;
+  final TextInputType? keyboardType;
 
   @override
   Widget build(BuildContext context) {
@@ -975,7 +1092,7 @@ class _FormField extends StatelessWidget {
       Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF333333))),
       const SizedBox(height: 8),
       TextField(
-        readOnly: readOnly,
+        keyboardType: keyboardType,
         decoration: InputDecoration(
           hintText: hint, hintStyle: const TextStyle(fontSize: 14, color: Color(0xFFBBBBBB)),
           filled: true, fillColor: const Color(0xFFF7F7F7),
