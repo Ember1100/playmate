@@ -25,8 +25,8 @@ class AppColors {
   AppColors._();
 
   // 主色
-  static const primary       = Color(0xFFFFB703); // 暖琥珀黄
-  static const primaryLight  = Color(0xFFFFE8C0); // 浅暖黄
+  static const primary       = Color(0xFFFF7A00); // 主橙
+  static const primaryLight  = Color(0xFFFFE0C0); // 浅橙
 
   // 辅色
   static const secondary     = Color(0xFF5DCAA5); // 绿
@@ -38,12 +38,12 @@ class AppColors {
   static const textMedium    = Color(0xFF666666);
 
   // 背景
-  static const background    = Color(0xFFFFF9EF); // 极浅暖黄（页面底色）
+  static const background    = Color(0xFFFFF8EC); // 极浅暖橙（页面底色）
   static const surface       = Color(0xFFFFFFFF);
   static const warmBg        = Color(0xFFFFE8C0); // 我的页面背景
 
   // 分割线 / 边框
-  static const border        = Color(0xFFFFE0B2); // 暖橙边框
+  static const border        = Color(0xFFFFDDB8); // 暖橙边框
 
   // 功能色
   static const error         = Color(0xFFE24B4A);

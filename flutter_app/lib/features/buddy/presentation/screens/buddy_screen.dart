@@ -10,14 +10,11 @@ class BuddyScreen extends StatefulWidget {
   State<BuddyScreen> createState() => _BuddyScreenState();
 }
 
-class _BuddyScreenState extends State<BuddyScreen> {
-  static const _tags = ['旅行户外', '娱乐搭子', '游戏搭子', '脱单搭子'];
-
+class _BuddyScreenState extends State<BuddyScreen> with WidgetsBindingObserver {
   // 搭子局 分类
   static const _categories = ['生活', '学习', '兴趣', '游戏', '自定义'];
   int _catIndex = 0;
 
-  // 每个一级分类对应的子标签
   static const _subTags = {
     '生活': ['饭搭子', '探店搭子', '遛宠搭子', '观影搭子', '健身搭子', '更多...'],
     '学习': ['考研搭子', '刷题搭子', '图书馆搭子', '语言搭子', '更多...'],
@@ -25,65 +22,367 @@ class _BuddyScreenState extends State<BuddyScreen> {
     '游戏': ['手游搭子', '桌游搭子', '剧本杀搭子', 'Steam搭子', '更多...'],
     '自定义': ['我发起的', '我参与的'],
   };
-  int _subTagIndex = -1; // -1 = 未选子标签 → 显示搭子局；>=0 → 显示搭子人物
+  int _subTagIndex = -1;
+  final int _topTab = 0;
 
-  // 顶层 Tab：0=搭子局  1=搭子
-  int _topTab = 0;
+  // ── 搜索状态 ──────────────────────────────────────────────────────────────
+  final _searchCtrl = TextEditingController();
+  final _searchFocus = FocusNode();
+  bool _searchActive = false; // 搜索模式是否激活（唯一权威标志）
+  bool _hasResults = false;
+  int _searchTab = 0;
+
+  static const _hotTags = ['爬山搭子', '读书搭子', '健身搭子', '游戏搭子', '电影搭子', '旅行搭子', '摄影搭子', '美食搭子'];
+  static const _searchTabs = ['精选搭子', '新人搭子', '附近搭子', '活跃搭子'];
+  static const _people = [
+    _PersonData(emoji: '😊', g1: Color(0xFFFDE68A), g2: Color(0xFFFB923C), name: '阿毛', online: true),
+    _PersonData(emoji: '🙂', g1: Color(0xFFFED7AA), g2: Color(0xFFF97316), name: '大欢', online: false),
+    _PersonData(emoji: '😄', g1: Color(0xFFD9F99D), g2: Color(0xFF84CC16), name: '小雅', online: true),
+    _PersonData(emoji: '😃', g1: Color(0xFFBFDBFE), g2: Color(0xFF60A5FA), name: '邓子', online: false),
+    _PersonData(emoji: '😆', g1: Color(0xFFFECDD3), g2: Color(0xFFF43F5E), name: '欢哥', online: true),
+    _PersonData(emoji: '🙃', g1: Color(0xFFC7D2FE), g2: Color(0xFF818CF8), name: '小鱼', online: false),
+    _PersonData(emoji: '😁', g1: Color(0xFFA7F3D0), g2: Color(0xFF34D399), name: '老王', online: false),
+    _PersonData(emoji: '😏', g1: Color(0xFFFDE68A), g2: Color(0xFFFBBF24), name: '冬冬', online: true),
+  ];
+  static const _results = [
+    _ResultData(emoji: '🧗', gradientColors: [Color(0xFFD9F99D), Color(0xFF84CC16)], name: '登山小雅', badge: '精选', badgeGreen: false, tags: ['爬山', '户外', '摄影'], desc: '周末常爬北山，想找一起看日出的搭子', meta: '3.2km · 上线 2 小时前'),
+    _ResultData(emoji: '⛰️', gradientColors: [Color(0xFFFDE68A), Color(0xFFF59E0B)], name: '阿毛户外', badge: '在线', badgeGreen: true, tags: ['爬山', '露营'], desc: '资深驴友，去过华山泰山，周末空闲', meta: '5.1km · 刚刚在线'),
+    _ResultData(emoji: '🥾', gradientColors: [Color(0xFFC7D2FE), Color(0xFF818CF8)], name: '欢哥探路', badge: '活跃', badgeGreen: false, tags: ['爬山', '徒步', '野炊'], desc: '组建过多次周末爬山小队，欢迎加入', meta: '7.8km · 昨天在线'),
+  ];
+
+  // 搜索模式：只要 _searchActive=true 就拦截返回手势，避免中间帧导致的漏拦截
+  bool get _isSearching => _searchActive;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _searchFocus.addListener(() {
+      if (_searchFocus.hasFocus && !_searchActive) {
+        setState(() => _searchActive = true);
+      } else {
+        setState(() {}); // 失焦时仅刷新，不清 _searchActive
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  // 在 WidgetsBinding 层拦截 Android 返回手势，
+  // 比 PopScope 更早执行，与 go_router 嵌套 Navigator 层级无关
+  @override
+  Future<bool> didPopRoute() async {
+    if (_searchActive) {
+      _cancelSearch();
+      return true; // 已处理，不再向上冒泡
+    }
+    return false; // 未处理，交给系统
+  }
+
+  void _doSearch() {
+    final text = _searchCtrl.text.trim();
+    if (text.isEmpty) {
+      setState(() => _hasResults = false);
+    } else {
+      setState(() { _searchActive = true; _hasResults = true; });
+    }
+  }
+
+  void _clearSearch() {
+    _searchCtrl.clear();
+    setState(() => _hasResults = false);
+    // 焦点保持，键盘不收起，用户可继续输入
+  }
+
+  void _cancelSearch() {
+    _searchCtrl.clear();
+    _searchFocus.unfocus();
+    setState(() { _searchActive = false; _hasResults = false; });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFFF9EF),
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            // ── 原有头部：标题栏 + 横幅 + 搜索 + 分类卡片 + 标签 ──
-            SliverToBoxAdapter(child: _buildHeader()),
-            SliverToBoxAdapter(child: _buildBanner()),
-            SliverToBoxAdapter(child: _buildSearchBar(context)),
-            SliverToBoxAdapter(child: _buildCategoryGrid(context)),
-            // ── 搭子局 / 搭子 两层切换区域 ──
-            SliverToBoxAdapter(child: _buildTopTabBar()),
-            SliverToBoxAdapter(child: _buildCategoryTabs()),
-            SliverToBoxAdapter(child: _buildSubTagRow()),
-            // 内容区
-            _topTab == 0
-                ? (_subTagIndex < 0
-                    ? _buildGatherListSliver()
-                    : _buildSubTagBuddyGridSliver())
-                : _buildBuddyFeedGridSliver(),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-          ],
+    return PopScope(
+      // 搜索激活时拦截系统返回（Android 返回键 / 边缘滑动），改为取消搜索
+      canPop: !_isSearching,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _cancelSearch();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFFF9EF),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildSearchBar(),
+              Expanded(
+                child: _isSearching
+                    ? (_hasResults ? _buildResultList() : _buildSearchDefaultContent())
+                    : _buildNormalContent(),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ── 原有：标题栏 ──────────────────────────────────────────────────────────
-  Widget _buildHeader() {
-    return Container(
-      height: 44,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFF0F0F0))),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: const Row(
+  // ── 搜索栏（贯穿所有状态的唯一输入框）────────────────────────────────────
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: Row(
         children: [
+          // 搜索框
           Expanded(
-            child: Center(
-              child: Text(
-                '俱乐部兴趣活动',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF222222),
-                ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFFF8C42), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFF8C42).withValues(alpha: 0.10),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(width: 12),
+                  const Icon(Icons.search_rounded, color: Color(0xFFFF8C42), size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchCtrl,
+                      focusNode: _searchFocus,
+                      textInputAction: TextInputAction.search,
+                      onChanged: (_) => _doSearch(),
+                      onSubmitted: (_) => _doSearch(),
+                      style: const TextStyle(fontSize: 14, color: Color(0xFF2C2C2A)),
+                      decoration: const InputDecoration(
+                        hintText: '搜搭子或搭子局…',
+                        hintStyle: TextStyle(fontSize: 14, color: Color(0xFFBBBBBB)),
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 11),
+                      ),
+                    ),
+                  ),
+                  if (_searchCtrl.text.isNotEmpty)
+                    GestureDetector(
+                      onTap: _clearSearch,
+                      child: Container(
+                        width: 18, height: 18,
+                        margin: const EdgeInsets.only(right: 10),
+                        decoration: const BoxDecoration(color: Color(0xFFDDDDDD), shape: BoxShape.circle),
+                        child: const Icon(Icons.close, size: 11, color: Color(0xFF999999)),
+                      ),
+                    )
+                  else
+                    const SizedBox(width: 4),
+                ],
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  // ── 搜索结果列表（有结果时显示）─────────────────────────────────────────
+
+  Widget _buildResultList() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: const [
+                Text('搭子推荐',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF888780))),
+                Text('共 24 人',
+                    style: TextStyle(fontSize: 12, color: Color(0xFFFF8C42))),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: _results
+                  .map((r) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _ResultCard(data: r),
+                      ))
+                  .toList(),
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            height: 0.5,
+            color: const Color(0xFFE8E6E0),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: const [
+                Text('相关搭子局',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF888780))),
+                Text('共 8 个',
+                    style: TextStyle(fontSize: 12, color: Color(0xFFFF8C42))),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: _GroupCard(),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: Text('查看更多结果',
+                  style: TextStyle(fontSize: 13, color: Color(0xFFFF8C42))),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 搜索激活但未出结果：热搜词 + Tab + 人物宫格 ───────────────────────────
+
+  Widget _buildSearchDefaultContent() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 4),
+          // 热搜标签
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: Text('大家都在搜',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFFFF8C42))),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _hotTags.map((tag) => GestureDetector(
+                onTap: () {
+                  _searchCtrl.text = tag;
+                  _doSearch();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFFF8C42).withValues(alpha: 0.25), width: 0.5),
+                  ),
+                  child: Text(tag, style: const TextStyle(fontSize: 13, color: Color(0xFF555550))),
+                ),
+              )).toList(),
+            ),
+          ),
+          // Tab 切换
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0ECE7),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.all(3),
+              child: Row(
+                children: List.generate(_searchTabs.length, (i) {
+                  final active = i == _searchTab;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _searchTab = i),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(vertical: 7),
+                        decoration: BoxDecoration(
+                          color: active ? Colors.white : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: active
+                              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 4, offset: const Offset(0, 1))]
+                              : null,
+                        ),
+                        child: Text(
+                          _searchTabs[i],
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: active ? FontWeight.w500 : FontWeight.w400,
+                            color: active ? const Color(0xFFFF8C42) : const Color(0xFF888780),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ),
+          // 5列人物宫格
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 5,
+                mainAxisSpacing: 14,
+                crossAxisSpacing: 6,
+                childAspectRatio: 0.75,
+              ),
+              itemCount: _people.length,
+              itemBuilder: (_, i) => _PersonCell(data: _people[i]),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  // ── 普通内容（搜索未激活时）────────────────────────────────────────────────
+
+  Widget _buildNormalContent() {
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
+      slivers: [
+        SliverToBoxAdapter(child: _buildBanner()),
+        SliverToBoxAdapter(child: _buildCategoryGrid(context)),
+        SliverToBoxAdapter(child: _buildTopTabBar()),
+        SliverToBoxAdapter(child: _buildCategoryTabs()),
+        SliverToBoxAdapter(child: _buildSubTagRow()),
+        _topTab == 0
+            ? (_subTagIndex < 0
+                ? _buildGatherListSliver()
+                : _buildSubTagBuddyGridSliver())
+            : _buildBuddyFeedGridSliver(),
+        const SliverToBoxAdapter(child: SizedBox(height: 24)),
+      ],
     );
   }
 
@@ -132,26 +431,6 @@ class _BuddyScreenState extends State<BuddyScreen> {
     );
   }
 
-  // ── 原有：搜索栏 ──────────────────────────────────────────────────────────
-  Widget _buildSearchBar(BuildContext context) {
-    return GestureDetector(
-      onTap: () => context.push('/buddy/search'),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-        height: 42,
-        decoration: BoxDecoration(color: const Color(0xFFFFE8C0), borderRadius: BorderRadius.circular(999)),
-        child: const Row(
-          children: [
-            SizedBox(width: 14),
-            Icon(Icons.search_rounded, color: Color(0xFF888888), size: 18),
-            SizedBox(width: 8),
-            Text('请输入关键词', style: TextStyle(color: Color(0xFF888888), fontSize: 14)),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ── 原有：三分类卡片（线上搭子/线下搭子/职业搭子）────────────────────────
   Widget _buildCategoryGrid(BuildContext context) {
     return Padding(
@@ -169,7 +448,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
                   ),
                   const SizedBox(height: 10),
                   Expanded(
-                    child: _CategoryCard(title: '线下搭子', subtitle: '按照需求进行匹配', bgColor: const Color(0xFFFFE082), decoType: _CardDecoType.offline, onTap: () => context.push('/buddy/candidates')),
+                    child: _CategoryCard(title: '发起搭子局', subtitle: '呼朋唤友出去玩', bgColor: const Color(0xFFFFE082), decoType: _CardDecoType.offline, onTap: () => _showPublishDialog()),
                   ),
                 ],
               ),
@@ -185,61 +464,13 @@ class _BuddyScreenState extends State<BuddyScreen> {
   }
 
   // ── 原有：标签行 ──────────────────────────────────────────────────────────
-  Widget _buildTagRow() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 4, 0, 14),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: _tags.map((tag) {
-            return Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white, borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: const Color(0xFFF0F0F0)),
-                boxShadow: const [BoxShadow(blurRadius: 8, color: Color(0x0D000000), offset: Offset(0, 2))],
-              ),
-              child: Text(tag, style: const TextStyle(fontSize: 13, color: Color(0xFF222222))),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
   // ══════════════════════════════════════════════════════════════════════════
   //  以下是新增的搭子局 / 搭子人物 两层切换
   // ══════════════════════════════════════════════════════════════════════════
 
-  // ── 顶部 Tab 栏：搭子局 / 搭子 + 发起按钮 ────────────────────────────────
+  // ── 顶部 Tab 栏：搭子局 / 搭子 ─────────────────────────────────────────
   Widget _buildTopTabBar() {
-    return Container(
-      height: 50,
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          const Spacer(),
-          if (_topTab == 0)
-            GestureDetector(
-              onTap: () => _showPublishDialog(),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: const Color(0xFFFF7A00), borderRadius: BorderRadius.circular(20)),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.add, color: Colors.white, size: 16),
-                    SizedBox(width: 4),
-                    Text('发起搭子局', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
 
   // ── 一级分类 Tab（搭子局 Tab 下才显示）────────────────────────────────────
@@ -385,7 +616,8 @@ class _BuddyScreenState extends State<BuddyScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      enableDrag: false,          // 禁止下滑手势关闭，防止事件穿透到底层页面
+      useRootNavigator: true,     // 挂到根 Navigator，不受 Scaffold resizeToAvoidBottomInset 影响
+      enableDrag: false,
       backgroundColor: Colors.transparent,
       builder: (_) => const _PublishGatherSheet(),
     );
@@ -580,28 +812,6 @@ class _CardDecoPainter extends CustomPainter {
 // ═════════════════════════════════════════════════════════════════════════════
 //  顶层 Tab 文字
 // ═════════════════════════════════════════════════════════════════════════════
-
-class _TopTab extends StatelessWidget {
-  const _TopTab({required this.label, required this.selected, required this.onTap});
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(label, style: TextStyle(fontSize: 16, fontWeight: selected ? FontWeight.w700 : FontWeight.w400, color: selected ? const Color(0xFF222222) : const Color(0xFF999999))),
-          const SizedBox(height: 2),
-          AnimatedContainer(duration: const Duration(milliseconds: 200), height: 3, width: selected ? 24 : 0, decoration: BoxDecoration(color: const Color(0xFFFF7A00), borderRadius: BorderRadius.circular(2))),
-        ],
-      ),
-    );
-  }
-}
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  搭子局数据模型 + 卡片
@@ -924,119 +1134,823 @@ class _PublishGatherSheet extends StatefulWidget {
 }
 
 class _PublishGatherSheetState extends State<_PublishGatherSheet> {
+  final _titleCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _customPeopleCtrl = TextEditingController();
+
+  int? _categoryIndex;
   DateTime? _startTime;
   DateTime? _endTime;
+  // 2/3/4 → 固定；-1 → 自定义（读 _customPeopleCtrl）
+  int? _peopleCount;
+  bool _customPeopleMode = false;
+  String? _location;
+  final Set<int> _vibeSet = {};
 
-  static String _fmt(DateTime dt) {
-    String p(int n) => n.toString().padLeft(2, '0');
-    return '${dt.year}年${p(dt.month)}月${p(dt.day)}日 ${p(dt.hour)}:${p(dt.minute)}';
+  static const _categories = [
+    ('🍜', '吃货'),
+    ('👀', '看看'),
+    ('⚽', '运动'),
+    ('🎮', '游戏'),
+    ('✨', '其他'),
+  ];
+  static const _vibes = ['轻松', '认真', '新手友好'];
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
   }
 
-  Future<void> _pickTime(bool isStart) async {
-    final now    = DateTime.now();
-    final initial = isStart ? (_startTime ?? now) : (_endTime ?? (_startTime ?? now).add(const Duration(hours: 2)));
+  // 时间格式：2026年4月17日 20:30
+  String _fmtTime(DateTime dt) {
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '${dt.year}年${dt.month}月${dt.day}日 $h:$m';
+  }
 
-    final date = await showDatePicker(
+  Future<void> _pickLocation() async {
+    final ctrl = TextEditingController(text: _location);
+    await showModalBottomSheet<void>(
       context: context,
-      initialDate: initial,
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 365)),
-      locale: const Locale('zh'),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: Color(0xFFFF7A00)),
+      isScrollControlled: true,
+      enableDrag: false,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('输入集合地点', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: '如：图书馆南门、B区食堂门口',
+                  hintStyle: const TextStyle(color: Color(0xFFBBBBBB)),
+                  filled: true,
+                  fillColor: const Color(0xFFF7F7F7),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton(
+                  onPressed: () {
+                    setState(() => _location = ctrl.text.trim().isEmpty ? null : ctrl.text.trim());
+                    Navigator.pop(ctx);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF7A00),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(23)),
+                  ),
+                  child: const Text('确认', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+                ),
+              ),
+            ],
+          ),
         ),
-        child: child!,
       ),
+    );
+  }
+
+  Future<void> _pickStartTime() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final init = _startTime ?? now;
+    final date = await showDatePicker(
+      context: context, initialDate: init, firstDate: today,
+      lastDate: today.add(const Duration(days: 365)),
+      builder: (ctx, child) => Theme(data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFFFF7A00))), child: child!),
     );
     if (date == null || !mounted) return;
-
     final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(initial),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: Color(0xFFFF7A00)),
-        ),
-        child: child!,
-      ),
+      context: context, initialTime: TimeOfDay.fromDateTime(init),
+      builder: (ctx, child) => Theme(data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFFFF7A00))), child: child!),
     );
     if (time == null || !mounted) return;
-
     final result = DateTime(date.year, date.month, date.day, time.hour, time.minute);
     setState(() {
-      if (isStart) {
-        _startTime = result;
-        // 结束时间若早于开始时间，自动顺延 2 小时
-        if (_endTime != null && _endTime!.isBefore(result)) {
-          _endTime = result.add(const Duration(hours: 2));
-        }
-      } else {
-        _endTime = result;
+      _startTime = result;
+      if (_endTime != null && _endTime!.isBefore(result)) {
+        _endTime = result.add(const Duration(hours: 2));
       }
     });
+  }
+
+  Future<void> _pickEndTime() async {
+    final base = _startTime ?? DateTime.now();
+    final baseDay = DateTime(base.year, base.month, base.day);
+    final init = _endTime ?? base.add(const Duration(hours: 2));
+    final date = await showDatePicker(
+      context: context, initialDate: init, firstDate: baseDay,
+      lastDate: baseDay.add(const Duration(days: 30)),
+      builder: (ctx, child) => Theme(data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFFFF7A00))), child: child!),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context, initialTime: TimeOfDay.fromDateTime(init),
+      builder: (ctx, child) => Theme(data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFFFF7A00))), child: child!),
+    );
+    if (time == null || !mounted) return;
+    setState(() => _endTime = DateTime(date.year, date.month, date.day, time.hour, time.minute));
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      height: MediaQuery.of(context).size.height * 0.92,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 12, 4, 0),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                const Text('发起搭子局', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Color(0xFF222222))),
-                Positioned(
-                  right: 0,
-                  child: IconButton(
-                    icon: const Icon(Icons.close, size: 20, color: Color(0xFF999999)),
-                    onPressed: () => Navigator.pop(context),
+          // ── 橙色渐变头部 ──────────────────────────────────────────────────
+          _buildHeader(),
+
+          // ── 表单区 ───────────────────────────────────────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(16, 20, 16, MediaQuery.of(context).viewInsets.bottom + 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildTitleField(),
+                  _buildDivider(),
+                  _buildCategoryRow(),
+                  _buildDivider(),
+                  _buildLocationRow(),
+                  _buildDivider(),
+                  _buildTimeRow(),
+                  _buildDivider(),
+                  _buildPeopleRow(),
+                  _buildDivider(),
+                  _buildVibeRow(),
+                  _buildDivider(),
+                  _buildDescField(),
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ),
+
+          // ── 底部发布按钮 ─────────────────────────────────────────────────
+          Container(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Color(0xFFF0F0F0))),
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF9A3C), Color(0xFFFF6B00)],
                   ),
+                  borderRadius: BorderRadius.circular(25),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF7A00).withValues(alpha: 0.35),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    )
+                  ],
                 ),
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                  ),
+                  child: const Text('发布搭子局',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 头部 ─────────────────────────────────────────────────────────────────
+
+  Widget _buildHeader() {
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF2D1B69), Color(0xFF11998E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 44, 16, 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text('🎯 发起搭子局',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white, height: 1.3)),
+                SizedBox(height: 4),
+                Text('习惯相遇，就是找到人',
+                    style: TextStyle(fontSize: 13, color: Colors.white70)),
               ],
             ),
           ),
-          const Divider(height: 16),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                _FormField(label: '活动名称', hint: '给你的搭子局起个名字'),
-                const SizedBox(height: 16),
-                _FormField(label: '活动地点', hint: '输入详细地址'),
-                const SizedBox(height: 16),
-                _DateTimeTile(
-                  label: '开始时间',
-                  value: _startTime != null ? _fmt(_startTime!) : null,
-                  hint: '请选择开始时间',
-                  onTap: () => _pickTime(true),
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close, color: Colors.white70, size: 22),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 活动名称 ─────────────────────────────────────────────────────────────
+
+  Widget _buildTitleField() {
+    return _Section(
+      iconBg: const Color(0xFFFFF0E0),
+      icon: '📝',
+      label: '活动名称',
+      child: TextField(
+        controller: _titleCtrl,
+        style: const TextStyle(fontSize: 14, color: Color(0xFF222222)),
+        decoration: InputDecoration(
+          hintText: '今晚一起打羽毛球',
+          hintStyle: const TextStyle(fontSize: 14, color: Color(0xFFBBBBBB)),
+          filled: true,
+          fillColor: const Color(0xFFF7F7F7),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        ),
+      ),
+    );
+  }
+
+  // ── 类型 ─────────────────────────────────────────────────────────────────
+
+  Widget _buildCategoryRow() {
+    return _Section(
+      iconBg: const Color(0xFFE8F5E9),
+      icon: '🎨',
+      label: '类型',
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: List.generate(_categories.length, (i) {
+            final selected = i == _categoryIndex;
+            return GestureDetector(
+              onTap: () => setState(() => _categoryIndex = i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: selected ? const Color(0xFFFF7A00) : const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                const SizedBox(height: 16),
-                _DateTimeTile(
-                  label: '结束时间',
-                  value: _endTime != null ? _fmt(_endTime!) : null,
-                  hint: '请选择结束时间',
-                  onTap: () => _pickTime(false),
-                ),
-                const SizedBox(height: 16),
-                _FormField(label: '人数上限', hint: '最多几人参加（2-50）', keyboardType: TextInputType.number),
-                const SizedBox(height: 16),
-                _FormField(label: '活动主题', hint: '饭搭子 / 观影搭子 / 其他...'),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity, height: 48,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF7A00), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                    child: const Text('发布搭子局', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                child: Text(
+                  '${_categories[i].$1} ${_categories[i].$2}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: selected ? Colors.white : const Color(0xFF555555),
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                   ),
                 ),
-                const SizedBox(height: 24),
-              ]),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
+  // ── 地点 ─────────────────────────────────────────────────────────────────
+
+  Widget _buildLocationRow() {
+    return _Section(
+      iconBg: const Color(0xFFFFEBEE),
+      icon: '📍',
+      label: '地点',
+      child: GestureDetector(
+        onTap: _pickLocation,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F7F7),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _location ?? '选择位置',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: _location != null ? const Color(0xFF333333) : const Color(0xFFBBBBBB),
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right, size: 18, color: Color(0xFFCCCCCC)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── 时间 ─────────────────────────────────────────────────────────────────
+
+  Widget _buildTimeRow() {
+    final hasStart = _startTime != null;
+    final hasEnd = _endTime != null;
+    return _Section(
+      iconBg: const Color(0xFFE3F2FD),
+      icon: '🕐',
+      label: '时间',
+      child: Column(
+        children: [
+          // 开始时间行
+          GestureDetector(
+            onTap: _pickStartTime,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F7F7),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Text('开始  ', style: TextStyle(fontSize: 12, color: Color(0xFF999999))),
+                  Expanded(
+                    child: Text(
+                      hasStart ? _fmtTime(_startTime!) : '选择开始时间',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: hasStart ? const Color(0xFF333333) : const Color(0xFFBBBBBB),
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, size: 16, color: Color(0xFFCCCCCC)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // 结束时间行
+          GestureDetector(
+            onTap: _pickEndTime,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F7F7),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Text('结束  ', style: TextStyle(fontSize: 12, color: Color(0xFF999999))),
+                  Expanded(
+                    child: Text(
+                      hasEnd ? _fmtTime(_endTime!) : '选择结束时间',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: hasEnd ? const Color(0xFF333333) : const Color(0xFFBBBBBB),
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, size: 16, color: Color(0xFFCCCCCC)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 人数 ─────────────────────────────────────────────────────────────────
+
+  Widget _buildPeopleRow() {
+    Widget pill({required String label, required bool selected, required VoidCallback onTap}) {
+      return GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          margin: const EdgeInsets.only(right: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          height: 36,
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFFF7A00) : const Color(0xFFF5F5F5),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                color: selected ? Colors.white : const Color(0xFF555555),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return _Section(
+      iconBg: const Color(0xFFF3E5F5),
+      icon: '👥',
+      label: '人数',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              ...([2, 3, 4].map((n) => pill(
+                label: '$n人',
+                selected: !_customPeopleMode && n == _peopleCount,
+                onTap: () => setState(() { _peopleCount = n; _customPeopleMode = false; }),
+              ))),
+              pill(
+                label: '自定义',
+                selected: _customPeopleMode,
+                onTap: () => setState(() { _customPeopleMode = true; _peopleCount = -1; }),
+              ),
+            ],
+          ),
+          if (_customPeopleMode) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 38,
+              child: TextField(
+                controller: _customPeopleCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  hintText: '请输入人数',
+                  hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFBBBBBB)),
+                  filled: true,
+                  fillColor: const Color(0xFFF7F7F7),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  isDense: true,
+                  suffixText: '人',
+                  suffixStyle: const TextStyle(fontSize: 13, color: Color(0xFF888888)),
+                ),
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── 氛围（可选）─────────────────────────────────────────────────────────
+
+  Widget _buildVibeRow() {
+    return _Section(
+      iconBg: const Color(0xFFFFF8E1),
+      icon: '💬',
+      label: '氛围',
+      optional: true,
+      child: Row(
+        children: List.generate(_vibes.length, (i) {
+          final selected = _vibeSet.contains(i);
+          return GestureDetector(
+            onTap: () => setState(() {
+              if (selected) { _vibeSet.remove(i); } else { _vibeSet.add(i); }
+            }),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: selected ? const Color(0xFFFFF0DC) : const Color(0xFFF5F5F5),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: selected ? const Color(0xFFFF7A00) : Colors.transparent,
+                ),
+              ),
+              child: Text(
+                _vibes[i],
+                style: TextStyle(
+                  fontSize: 13,
+                  color: selected ? const Color(0xFFFF7A00) : const Color(0xFF777777),
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  // ── 说明（可选）─────────────────────────────────────────────────────────
+
+  Widget _buildDescField() {
+    return _Section(
+      iconBg: const Color(0xFFE8EAF6),
+      icon: '✏️',
+      label: '说明',
+      optional: true,
+      child: TextField(
+        controller: _descCtrl,
+        maxLines: 3,
+        style: const TextStyle(fontSize: 14, color: Color(0xFF222222)),
+        decoration: InputDecoration(
+          hintText: '比如：新手也可以，女生优先…',
+          hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFBBBBBB)),
+          filled: true,
+          fillColor: const Color(0xFFF7F7F7),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDivider() =>
+      const Divider(height: 24, thickness: 0.5, color: Color(0xFFF0F0F0));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 表单行通用容器
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Section extends StatelessWidget {
+  const _Section({
+    required this.iconBg,
+    required this.icon,
+    required this.label,
+    required this.child,
+    this.optional = false,
+  });
+
+  final Color iconBg;
+  final String icon;
+  final String label;
+  final Widget child;
+  final bool optional;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+              child: Center(child: Text(icon, style: const TextStyle(fontSize: 14))),
+            ),
+            const SizedBox(width: 8),
+            Text(label,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF333333))),
+            if (optional) ...[
+              const SizedBox(width: 6),
+              const Text('(可选)',
+                  style: TextStyle(fontSize: 11, color: Color(0xFFAAAAAA))),
+            ],
+          ],
+        ),
+        const SizedBox(height: 10),
+        child,
+      ],
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  搜索相关：人物数据 + 人物格子
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _PersonData {
+  const _PersonData({
+    required this.emoji,
+    required this.g1,
+    required this.g2,
+    required this.name,
+    required this.online,
+  });
+  final String emoji;
+  final Color g1;
+  final Color g2;
+  final String name;
+  final bool online;
+}
+
+class _PersonCell extends StatelessWidget {
+  const _PersonCell({required this.data});
+  final _PersonData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [data.g1, data.g2],
+                ),
+              ),
+              child: Center(child: Text(data.emoji, style: const TextStyle(fontSize: 24))),
+            ),
+            if (data.online)
+              Positioned(
+                bottom: 1,
+                right: 1,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4ADE80),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFFDF9F6), width: 2),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        Text(data.name,
+            style: const TextStyle(fontSize: 11, color: Color(0xFF888780)),
+            overflow: TextOverflow.ellipsis),
+      ],
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  搜索相关：结果数据 + 结果卡片
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _ResultData {
+  const _ResultData({
+    required this.emoji,
+    required this.gradientColors,
+    required this.name,
+    required this.badge,
+    required this.badgeGreen,
+    required this.tags,
+    required this.desc,
+    required this.meta,
+  });
+  final String emoji;
+  final List<Color> gradientColors;
+  final String name;
+  final String badge;
+  final bool badgeGreen;
+  final List<String> tags;
+  final String desc;
+  final String meta;
+}
+
+class _ResultCard extends StatelessWidget {
+  const _ResultCard({required this.data});
+  final _ResultData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06), width: 0.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: data.gradientColors,
+              ),
+            ),
+            child: Center(
+              child: Text(data.emoji, style: const TextStyle(fontSize: 26)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(data.name,
+                        style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF2C2C2A))),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: data.badgeGreen
+                            ? const Color(0xFFF0FDF4)
+                            : const Color(0xFFFFF7ED),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: data.badgeGreen
+                              ? const Color(0xFF16A34A).withValues(alpha: 0.2)
+                              : const Color(0xFFFF8C42).withValues(alpha: 0.25),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Text(
+                        data.badge,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: data.badgeGreen
+                              ? const Color(0xFF16A34A)
+                              : const Color(0xFFFF8C42),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 5,
+                  children: data.tags
+                      .map((t) => Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F5F3),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(t,
+                                style: const TextStyle(
+                                    fontSize: 11, color: Color(0xFF888780))),
+                          ))
+                      .toList(),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  data.desc,
+                  style: const TextStyle(
+                      fontSize: 12, color: Color(0xFF888780), height: 1.4),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(data.meta,
+                        style: const TextStyle(
+                            fontSize: 11, color: Color(0xFFBBBBBB))),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF8C42),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text('打招呼',
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.white)),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
@@ -1045,61 +1959,114 @@ class _PublishGatherSheetState extends State<_PublishGatherSheet> {
   }
 }
 
-class _DateTimeTile extends StatelessWidget {
-  const _DateTimeTile({required this.label, required this.hint, this.value, required this.onTap});
-  final String label;
-  final String hint;
-  final String? value;
-  final VoidCallback onTap;
+// ═════════════════════════════════════════════════════════════════════════════
+//  搜索相关：搭子局卡片
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _GroupCard extends StatelessWidget {
+  const _GroupCard();
+
+  static const _memberColors = [
+    [Color(0xFFFDE68A), Color(0xFFF59E0B)],
+    [Color(0xFFD9F99D), Color(0xFF84CC16)],
+    [Color(0xFFBFDBFE), Color(0xFF60A5FA)],
+    [Color(0xFFFECDD3), Color(0xFFF43F5E)],
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF333333))),
-      const SizedBox(height: 8),
-      GestureDetector(
-        onTap: onTap,
-        child: Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(color: const Color(0xFFF7F7F7), borderRadius: BorderRadius.circular(10)),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  value ?? hint,
-                  style: TextStyle(fontSize: 14, color: value != null ? const Color(0xFF333333) : const Color(0xFFBBBBBB)),
-                ),
-              ),
-              const Icon(Icons.chevron_right, size: 18, color: Color(0xFFBBBBBB)),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: Colors.black.withValues(alpha: 0.06), width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text('周末爬山小队 · 本周六',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF2C2C2A))),
+              Text('12/20 人',
+                  style:
+                      TextStyle(fontSize: 11, color: Color(0xFFBBBBBB))),
             ],
           ),
-        ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('爬山',
+                    style: TextStyle(
+                        fontSize: 11, color: Color(0xFFFF8C42))),
+              ),
+              const SizedBox(width: 8),
+              const Text('市郊北山 · 8:00 集合',
+                  style:
+                      TextStyle(fontSize: 11, color: Color(0xFFBBBBBB))),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text('轻装徒步，来回约 5 小时，老手新手都欢迎',
+              style: TextStyle(
+                  fontSize: 12, color: Color(0xFF888780), height: 1.4)),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 26,
+            child: Stack(
+              children: [
+                ..._memberColors.asMap().entries.map((e) => Positioned(
+                      left: e.key * 18.0,
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: e.value,
+                          ),
+                          border:
+                              Border.all(color: Colors.white, width: 2),
+                        ),
+                      ),
+                    )),
+                Positioned(
+                  left: _memberColors.length * 18.0,
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFF3F3F3),
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: const Center(
+                      child: Text('+8',
+                          style: TextStyle(
+                              fontSize: 8, color: Color(0xFFAAAAAA))),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
-    ]);
-  }
-}
-
-class _FormField extends StatelessWidget {
-  const _FormField({required this.label, required this.hint, this.keyboardType});
-  final String label;
-  final String hint;
-  final TextInputType? keyboardType;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF333333))),
-      const SizedBox(height: 8),
-      TextField(
-        keyboardType: keyboardType,
-        decoration: InputDecoration(
-          hintText: hint, hintStyle: const TextStyle(fontSize: 14, color: Color(0xFFBBBBBB)),
-          filled: true, fillColor: const Color(0xFFF7F7F7),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        ),
-      ),
-    ]);
+    );
   }
 }
