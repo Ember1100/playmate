@@ -105,11 +105,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     super.dispose();
   }
 
+  // reverse:true 时 position 0 即底部（最新消息）
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          0,
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
@@ -200,22 +201,24 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                 child: Text('加载失败', style: TextStyle(color: AppColors.textSecondary)),
               ),
               data: (msgs) {
-                WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
                 if (msgs.isEmpty) {
                   return const Center(
                     child: Text('暂无消息，快来聊聊吧',
                         style: TextStyle(color: AppColors.textSecondary)),
                   );
                 }
+                // reverse:true → index 0（最新消息）在底部，列表天然停在最新消息
+                // i+1 是视觉上方的消息（更旧），用于决定是否显示时间戳
                 return ListView.builder(
                   controller: _scrollController,
+                  reverse: true,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                   itemCount: msgs.length,
                   itemBuilder: (_, i) {
                     final msg  = msgs[i];
-                    final prev = i > 0 ? msgs[i - 1] : null;
-                    final showTime = prev == null ||
-                        msg.createdAt.difference(prev.createdAt).abs().inMinutes > 5;
+                    final older = i + 1 < msgs.length ? msgs[i + 1] : null;
+                    final showTime = older == null ||
+                        msg.createdAt.difference(older.createdAt).abs().inMinutes > 5;
                     final isMe = msg.senderId != null && msg.senderId == currentUser?.id;
                     return _GroupMsgItem(
                       msg: msg,

@@ -95,11 +95,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
+  // reverse:true 时 position 0 即底部（最新消息）
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          0,
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
@@ -273,8 +274,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         style: TextStyle(color: AppColors.textSecondary)),
                   );
                 }
+                // reverse:true → index 0 在底部，配合后端 DESC 返回
+                // 不需要 _scrollToBottom，列表天然停在最新消息
                 return ListView.builder(
                   controller: _scrollController,
+                  reverse: true,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 16),
                   itemCount: messages.length,
