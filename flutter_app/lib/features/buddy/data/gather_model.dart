@@ -16,6 +16,7 @@ class Gather {
     this.description,
     required this.vibes,
     required this.status,
+    this.groupId,
     required this.joinedCount,
     required this.isJoined,
     required this.memberAvatars,
@@ -36,6 +37,7 @@ class Gather {
   final String? description;
   final List<String> vibes;
   final int status;
+  final String? groupId;
   final int joinedCount;
   final bool isJoined;
   final List<String> memberAvatars;
@@ -70,6 +72,7 @@ class Gather {
       description:      json['description'] as String?,
       vibes:            (json['vibes'] as List<dynamic>? ?? []).cast<String>(),
       status:           json['status'] as int,
+      groupId:          json['group_id'] as String?,
       joinedCount:      json['joined_count'] as int,
       isJoined:         json['is_joined'] as bool? ?? false,
       memberAvatars:    (json['member_avatars'] as List<dynamic>? ?? []).cast<String>(),
@@ -93,6 +96,7 @@ class Gather {
       description:     description,
       vibes:           vibes,
       status:          status,
+      groupId:         groupId,
       joinedCount:     joinedCount ?? this.joinedCount,
       isJoined:        isJoined ?? this.isJoined,
       memberAvatars:   memberAvatars ?? this.memberAvatars,

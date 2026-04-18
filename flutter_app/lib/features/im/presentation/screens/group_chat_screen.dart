@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/api/api_client.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../auth/providers/auth_provider.dart';
 import '../../data/im_model.dart';
+import '../../data/websocket_service.dart';
 import '../../providers/im_provider.dart';
 
 class GroupChatScreen extends ConsumerStatefulWidget {
@@ -24,6 +29,7 @@ class GroupChatScreen extends ConsumerStatefulWidget {
 class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   final _textController  = TextEditingController();
   final _scrollController = ScrollController();
+  StreamSubscription<Map<String, dynamic>>? _wsSub;
 
   static const _colorPool = [
     Color(0xFF7F77DD), Color(0xFF4ECDC4), Color(0xFFFF6B6B),
@@ -36,9 +42,65 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
       _colorMap.putIfAbsent(senderId, () => _colorPool[_colorMap.length % _colorPool.length]);
 
   @override
+  void initState() {
+    super.initState();
+    _initWebSocket();
+  }
+
+  Future<void> _initWebSocket() async {
+    final tokenStorage = ref.read(tokenStorageProvider);
+    final token = await tokenStorage.getAccessToken();
+    if (token == null) return;
+
+    final wsService = ref.read(wsServiceProvider);
+    await wsService.connect(token);
+
+    // 进入群聊时标记已读
+    _markRead();
+
+    _wsSub = wsService.messages.listen((data) {
+      if (data['type'] == 'new_group_message') {
+        final gid = data['group_id'] as String?;
+        if (gid != widget.groupId) return;
+
+        final currentUser = ref.read(currentUserProvider);
+        final msg = GroupMessage(
+          id: (data['message_id'] as String?) ?? '',
+          groupId: gid ?? widget.groupId,
+          senderId: data['sender_id'] as String?,
+          senderUsername: data['sender_username'] as String? ?? '未知',
+          senderAvatarUrl: data['sender_avatar_url'] as String?,
+          type: data['msg_type'] as int? ?? 1,
+          content: data['content'] as String?,
+          mediaUrl: data['media_url'] as String?,
+          isRecalled: false,
+          createdAt: DateTime.tryParse(data['created_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+        );
+
+        // 过滤掉自己发的消息（已由 WS ack 时的乐观消息处理）
+        final senderId = data['sender_id'] as String?;
+        if (senderId == currentUser?.id) return;
+
+        ref.read(groupChatProvider(widget.groupId).notifier).addMessage(msg);
+        _scrollToBottom();
+      }
+    });
+  }
+
+  void _markRead() {
+    ref.read(wsServiceProvider).sendMessage({
+      'type': 'mark_group_read',
+      'group_id': widget.groupId,
+      'last_read_at': DateTime.now().toUtc().toIso8601String(),
+    });
+  }
+
+  @override
   void dispose() {
+    _wsSub?.cancel();
     _textController.dispose();
     _scrollController.dispose();
+    ref.read(groupSessionsProvider.notifier).refresh();
     super.dispose();
   }
 
@@ -66,26 +128,48 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   void _sendText() {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
+
+    final wsService = ref.read(wsServiceProvider);
+    if (!wsService.isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('连接中，请稍后重试')),
+      );
+      return;
+    }
+
     _textController.clear();
 
-    final msg = GroupMessage(
-      id: 'local-${DateTime.now().millisecondsSinceEpoch}',
+    final currentUser = ref.read(currentUserProvider);
+    // 乐观添加本地消息
+    final tempMsg = GroupMessage(
+      id: 'temp_${DateTime.now().millisecondsSinceEpoch}',
       groupId: widget.groupId,
-      senderId: 'me',
-      senderUsername: '我',
+      senderId: currentUser?.id,
+      senderUsername: currentUser?.username ?? '我',
       type: 1,
       content: text,
       isRecalled: false,
       createdAt: DateTime.now(),
     );
-    ref.read(groupChatProvider(widget.groupId).notifier).addMessage(msg);
+    ref.read(groupChatProvider(widget.groupId).notifier).addMessage(tempMsg);
     _scrollToBottom();
-    // TODO: sendGroupMessage via WebSocket
+
+    // 通过 WebSocket 发送
+    wsService.sendMessage({
+      'type': 'send_group_message',
+      'group_id': widget.groupId,
+      'msg_type': 1,
+      'content': text,
+    });
+
+    // 标记已读
+    _markRead();
   }
 
   @override
   Widget build(BuildContext context) {
     final msgsAsync = ref.watch(groupChatProvider(widget.groupId));
+    final currentUser = ref.watch(currentUserProvider);
     final subtitle  = widget.memberCount != null ? '${widget.memberCount}人' : null;
 
     return Scaffold(
@@ -131,11 +215,13 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                     final prev = i > 0 ? msgs[i - 1] : null;
                     final showTime = prev == null ||
                         msg.createdAt.difference(prev.createdAt).abs().inMinutes > 5;
+                    final isMe = msg.senderId != null && msg.senderId == currentUser?.id;
                     return _GroupMsgItem(
                       msg: msg,
                       showTime: showTime,
-                      isMe: msg.senderId == 'me',
-                      avatarColor: _avatarColor(msg.senderId),
+                      isMe: isMe,
+                      myUsername: currentUser?.username ?? '我',
+                      avatarColor: _avatarColor(msg.senderId ?? 'sys'),
                       formatTime: _formatTime,
                     );
                   },
@@ -209,6 +295,7 @@ class _GroupMsgItem extends StatelessWidget {
     required this.msg,
     required this.showTime,
     required this.isMe,
+    required this.myUsername,
     required this.avatarColor,
     required this.formatTime,
   });
@@ -216,6 +303,7 @@ class _GroupMsgItem extends StatelessWidget {
   final GroupMessage msg;
   final bool showTime;
   final bool isMe;
+  final String myUsername;
   final Color avatarColor;
   final String Function(DateTime) formatTime;
 
@@ -331,7 +419,10 @@ class _GroupMsgItem extends StatelessWidget {
                   CircleAvatar(
                     radius: 18,
                     backgroundColor: AppColors.primary,
-                    child: const Text('我', style: TextStyle(color: Colors.white, fontSize: 12)),
+                    child: Text(
+                      myUsername.isNotEmpty ? myUsername[0] : '我',
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
                   ),
               ],
             ),

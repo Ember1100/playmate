@@ -860,110 +860,100 @@ class _GatherCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: const Color(0xFFEDE5DA), width: 0.5),
+          boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 6, offset: Offset(0, 2))],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── image strip ───────────────────────────────────────────────
-            SizedBox(
-              height: 70,
-              child: Stack(fit: StackFit.expand, children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [color.withAlpha(210), color.withAlpha(130)],
-                      ),
-                    ),
-                  ),
-                ),
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  child: Container(color: Colors.black.withAlpha(56)),
-                ),
-                Positioned(
-                  bottom: 10, left: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: color.withAlpha(230),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(item.theme, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white)),
-                  ),
-                ),
-              ]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // ── 标题行 + 主题标签 ─────────────────────────────────────────
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              child: Text(item.title,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A), height: 1.35)),
             ),
-            // ── Body ─────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(13, 12, 13, 13),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(item.title,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF222222), height: 1.35)),
-                const SizedBox(height: 8),
-                if (item.location != null)
-                  Row(children: [
-                    const Icon(Icons.location_on_outlined, size: 12, color: Color(0xFFC8BFB5)),
-                    const SizedBox(width: 5),
-                    Expanded(child: Text(item.location!, style: const TextStyle(fontSize: 12, color: Color(0xFF888888)), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  ]),
-                if (item.location != null) const SizedBox(height: 4),
-                Row(children: [
-                  const Icon(Icons.schedule_rounded, size: 12, color: Color(0xFF4ADE80)),
-                  const SizedBox(width: 5),
-                  const Text('开始', style: TextStyle(fontSize: 12, color: Color(0xFF16A34A))),
-                  const SizedBox(width: 3),
-                  Text(_fmt(item.startTime), style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
-                ]),
-                const SizedBox(height: 4),
-                Row(children: [
-                  const Icon(Icons.cancel_outlined, size: 12, color: Color(0xFFF87171)),
-                  const SizedBox(width: 5),
-                  const Text('结束', style: TextStyle(fontSize: 12, color: Color(0xFFDC2626))),
-                  const SizedBox(width: 3),
-                  Text(_fmt(item.endTime), style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
-                ]),
-                const SizedBox(height: 10),
-                Row(children: [
-                  if (item.memberAvatars.isNotEmpty)
-                    SizedBox(
-                      height: 24,
-                      width: item.memberAvatars.length * 18.0 + 6,
-                      child: Stack(children: List.generate(item.memberAvatars.length, (i) => Positioned(
-                        left: i * 18.0,
-                        child: Container(
-                          width: 24, height: 24,
-                          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
-                          child: ClipOval(child: PmImage(item.memberAvatars[i], width: 24, height: 24, fit: BoxFit.cover)),
-                        ),
-                      ))),
-                    ),
-                  if (item.memberAvatars.isNotEmpty) const SizedBox(width: 10),
-                  Text('${item.joinedCount}/${item.capacity} 人参加', style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: item.isFull ? const Color(0xFFF0ECE6) : const Color(0xFFFF8C42),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text('参加', style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w500,
-                      color: item.isFull ? const Color(0xFFC8BFB5) : Colors.white,
-                    )),
-                  ),
-                ]),
-              ]),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: color.withAlpha(20),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: color.withAlpha(80), width: 0.8),
+              ),
+              child: Text(item.theme,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: color)),
             ),
+          ]),
+          const SizedBox(height: 12),
+          // ── 地点 ─────────────────────────────────────────────────────
+          if (item.location != null) ...[
+            Row(children: [
+              const Icon(Icons.location_on, size: 14, color: Color(0xFFE24B4A)),
+              const SizedBox(width: 6),
+              Expanded(child: Text(item.location!,
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF555555)),
+                  maxLines: 1, overflow: TextOverflow.ellipsis)),
+            ]),
+            const SizedBox(height: 8),
           ],
-        ),
+          // ── 开始时间 ──────────────────────────────────────────────────
+          Row(children: [
+            const Icon(Icons.play_circle_fill, size: 14, color: Color(0xFF4ADE80)),
+            const SizedBox(width: 6),
+            Text('开始：', style: const TextStyle(fontSize: 13, color: Color(0xFF555555))),
+            Text(_fmt(item.startTime), style: const TextStyle(fontSize: 13, color: Color(0xFF555555))),
+          ]),
+          const SizedBox(height: 8),
+          // ── 结束时间 ──────────────────────────────────────────────────
+          Row(children: [
+            const Icon(Icons.stop_circle, size: 14, color: Color(0xFFF87171)),
+            const SizedBox(width: 6),
+            Text('结束：', style: const TextStyle(fontSize: 13, color: Color(0xFF555555))),
+            Text(_fmt(item.endTime), style: const TextStyle(fontSize: 13, color: Color(0xFF555555))),
+          ]),
+          const SizedBox(height: 14),
+          // ── 底部：头像 + 人数 + 参加按钮 ─────────────────────────────
+          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            // 头像叠加
+            if (item.memberAvatars.isNotEmpty)
+              SizedBox(
+                height: 28,
+                width: item.memberAvatars.length * 20.0 + 8,
+                child: Stack(children: List.generate(item.memberAvatars.length, (i) => Positioned(
+                  left: i * 20.0,
+                  child: Container(
+                    width: 28, height: 28,
+                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                    child: ClipOval(child: PmImage(item.memberAvatars[i], width: 28, height: 28, fit: BoxFit.cover)),
+                  ),
+                ))),
+              ),
+            if (item.memberAvatars.isNotEmpty) const SizedBox(width: 8),
+            Text('${item.joinedCount}/${item.capacity} 人参加',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
+            const Spacer(),
+            // 参加按钮
+            GestureDetector(
+              onTap: item.isFull ? null : onTap,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                decoration: BoxDecoration(
+                  color: item.isFull ? const Color(0xFFF0ECE6) : const Color(0xFFFF7A00),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  item.isFull ? '已满' : '参加',
+                  style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600,
+                    color: item.isFull ? const Color(0xFFC8BFB5) : Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ]),
+        ]),
       ),
     );
   }
@@ -1215,42 +1205,74 @@ class _GatherDetailSheet extends ConsumerWidget {
           Container(
             padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(context).padding.bottom + 12),
             decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Color(0xFFF0F0F0)))),
-            child: SizedBox(
-              width: double.infinity, height: 48,
-              child: ElevatedButton(
-                onPressed: current.isFull ? null : () async {
-                  try {
-                    if (current.isJoined) {
-                      await ref.read(gatherListProvider(category).notifier).leave(current.id);
-                    } else {
-                      await ref.read(gatherListProvider(category).notifier).join(current.id);
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-                      );
-                    }
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: current.isJoined
-                      ? const Color(0xFFF0ECE6)
-                      : const Color(0xFFFF7A00),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: Text(
-                  current.isFull
-                      ? '名额已满'
-                      : current.isJoined
-                          ? '退出搭子局'
-                          : '立即参加（${current.joinedCount}/${current.capacity}）',
-                  style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w700,
-                    color: current.isJoined ? const Color(0xFF888888) : Colors.white,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 进入群聊（已参加且有群组时显示）
+                if (current.isJoined && current.groupId != null) ...[
+                  SizedBox(
+                    width: double.infinity, height: 44,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        context.push(
+                          '/im/group/${current.groupId}',
+                          extra: {
+                            'groupName': current.title,
+                            'memberCount': current.joinedCount,
+                          },
+                        );
+                      },
+                      icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                      label: const Text('进入搭子局群聊', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFFF7A00),
+                        side: const BorderSide(color: Color(0xFFFF7A00)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                // 参加 / 退出按钮
+                SizedBox(
+                  width: double.infinity, height: 48,
+                  child: ElevatedButton(
+                    onPressed: current.isFull && !current.isJoined ? null : () async {
+                      try {
+                        if (current.isJoined) {
+                          await ref.read(gatherListProvider(category).notifier).leave(current.id);
+                        } else {
+                          await ref.read(gatherListProvider(category).notifier).join(current.id);
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+                          );
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: current.isJoined
+                          ? const Color(0xFFF0ECE6)
+                          : const Color(0xFFFF7A00),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text(
+                      current.isFull && !current.isJoined
+                          ? '名额已满'
+                          : current.isJoined
+                              ? '退出搭子局'
+                              : '立即参加（${current.joinedCount}/${current.capacity}）',
+                      style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700,
+                        color: current.isJoined ? const Color(0xFF888888) : Colors.white,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ],
@@ -1345,7 +1367,8 @@ class _PublishGatherSheetState extends ConsumerState<_PublishGatherSheet> {
 
     final cat = _categories[_categoryIndex!];
     final theme = cat.$2;
-    final mainCategory = themeToCategory(theme);
+    // 优先使用用户所在的 Tab 分类，fallback 才从 theme 推导
+    final mainCategory = widget.defaultCategory ?? themeToCategory(theme);
     final capacity = _customPeopleMode
         ? (int.tryParse(_customPeopleCtrl.text) ?? 8)
         : (_peopleCount ?? 8);
@@ -1365,12 +1388,8 @@ class _PublishGatherSheetState extends ConsumerState<_PublishGatherSheet> {
           vibes:       _vibeSet.map((i) => _vibes[i]).toList(),
         ),
       );
-      // 插入到对应分类列表头部
+      // 插入到当前 Tab 列表头部（mainCategory 即 defaultCategory）
       ref.read(gatherListProvider(mainCategory).notifier).prepend(gather);
-      // 如果当前 defaultCategory 不同，也刷新 null（全部）
-      if (widget.defaultCategory != mainCategory) {
-        ref.read(gatherListProvider(widget.defaultCategory).notifier).prepend(gather);
-      }
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {

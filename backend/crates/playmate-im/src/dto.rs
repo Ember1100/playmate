@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{model::Message, repository::ConversationFull};
+use crate::{model::Message, repository::{ConversationFull, GroupMessageFull, GroupSessionFull}};
 
 // ── Requests ────────────────────────────────────────────────────────────────
 
@@ -77,6 +77,64 @@ impl From<Message> for MessageResponse {
             media_url:       m.media_url,
             is_recalled:     m.is_recalled,
             created_at:      m.created_at,
+        }
+    }
+}
+
+// ── 群聊 Responses ─────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct GroupSessionResponse {
+    pub id:              Uuid,
+    pub name:            String,
+    pub avatar_url:      Option<String>,
+    pub member_count:    i32,
+    pub last_message:    Option<String>,
+    pub last_message_at: Option<DateTime<Utc>>,
+    pub unread_count:    i64,
+}
+
+impl From<GroupSessionFull> for GroupSessionResponse {
+    fn from(g: GroupSessionFull) -> Self {
+        Self {
+            id:              g.id,
+            name:            g.name,
+            avatar_url:      g.avatar_url,
+            member_count:    g.member_count,
+            last_message:    g.last_message,
+            last_message_at: g.last_message_at,
+            unread_count:    g.unread_count,
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct GroupMessageResponse {
+    pub id:               Uuid,
+    pub group_id:         Uuid,
+    pub sender_id:        Option<Uuid>,
+    pub sender_username:  Option<String>,
+    pub sender_avatar_url: Option<String>,
+    pub msg_type:         i16,
+    pub content:          Option<String>,
+    pub media_url:        Option<String>,
+    pub is_recalled:      bool,
+    pub created_at:       DateTime<Utc>,
+}
+
+impl From<GroupMessageFull> for GroupMessageResponse {
+    fn from(m: GroupMessageFull) -> Self {
+        Self {
+            id:               m.id,
+            group_id:         m.group_id,
+            sender_id:        m.sender_id,
+            sender_username:  m.sender_username,
+            sender_avatar_url: m.sender_avatar_url,
+            msg_type:         m.msg_type,
+            content:          m.content,
+            media_url:        m.media_url,
+            is_recalled:      m.is_recalled,
+            created_at:       m.created_at,
         }
     }
 }

@@ -118,10 +118,7 @@ class ImRepository {
 
   Future<List<GroupSession>> getGroupSessions() async {
     try {
-      final resp = await _client.get<Map<String, dynamic>>(
-        '/circle/groups',
-        params: {'joined': true, 'with_last_message': true},
-      );
+      final resp = await _client.get<Map<String, dynamic>>('/im/groups');
       final data = resp['data'] as List<dynamic>? ?? [];
       final list = data
           .map((e) => GroupSession.fromJson(e as Map<String, dynamic>))
@@ -152,7 +149,7 @@ class ImRepository {
   Future<List<GroupMessage>> getGroupMessages(String groupId, {int page = 1}) async {
     try {
       final resp = await _client.get<Map<String, dynamic>>(
-        '/circle/groups/$groupId/messages',
+        '/im/groups/$groupId/messages',
         params: {'page': page},
       );
       final pageData = resp['data'] as Map<String, dynamic>? ?? {};

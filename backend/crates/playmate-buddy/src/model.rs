@@ -56,6 +56,7 @@ pub struct BuddyGather {
     pub description: Option<String>,
     pub vibes:       Vec<String>,
     pub status:      i16,
+    pub group_id:    Option<Uuid>,
     pub created_at:  DateTime<Utc>,
 }
 
@@ -76,6 +77,7 @@ pub struct BuddyGatherWithStats {
     pub description:      Option<String>,
     pub vibes:            Vec<String>,
     pub status:           i16,
+    pub group_id:         Option<Uuid>,
     pub created_at:       DateTime<Utc>,
     pub joined_count:     i64,
     pub is_joined:        bool,

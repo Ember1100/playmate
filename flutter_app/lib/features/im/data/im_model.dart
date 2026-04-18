@@ -93,7 +93,7 @@ class GroupMessage {
   const GroupMessage({
     required this.id,
     required this.groupId,
-    required this.senderId,
+    this.senderId,
     required this.senderUsername,
     this.senderAvatarUrl,
     required this.type,
@@ -106,10 +106,10 @@ class GroupMessage {
   factory GroupMessage.fromJson(Map<String, dynamic> json) => GroupMessage(
         id: json['id'] as String,
         groupId: json['group_id'] as String,
-        senderId: json['sender_id'] as String,
-        senderUsername: json['sender_username'] as String? ?? '未知',
+        senderId: json['sender_id'] as String?,
+        senderUsername: json['sender_username'] as String? ?? '系统',
         senderAvatarUrl: json['sender_avatar_url'] as String?,
-        type: json['type'] as int? ?? 1,
+        type: json['msg_type'] as int? ?? json['type'] as int? ?? 1,
         content: json['content'] as String?,
         mediaUrl: json['media_url'] as String?,
         isRecalled: json['is_recalled'] as bool? ?? false,
@@ -118,7 +118,7 @@ class GroupMessage {
 
   final String id;
   final String groupId;
-  final String senderId;
+  final String? senderId;
   final String senderUsername;
   final String? senderAvatarUrl;
   final int type;

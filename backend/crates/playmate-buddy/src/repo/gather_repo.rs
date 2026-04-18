@@ -13,7 +13,7 @@ use crate::model::{BuddyGather, BuddyGatherWithStats};
 
 const GATHER_COLS: &str =
     "id, creator_id, title, location, start_time, end_time,
-     category, theme, capacity, description, vibes, status, created_at";
+     category, theme, capacity, description, vibes, status, group_id, created_at";
 
 // ── 创建搭子局 ────────────────────────────────────────────────────────────────
 
@@ -30,11 +30,24 @@ pub async fn create(
     description: Option<&str>,
     vibes:       &[String],
 ) -> AppResult<BuddyGather> {
-    sqlx::query_as::<_, BuddyGather>(&format!(
+    // Step 1：创建对应的群聊
+    let (group_id,): (Uuid,) = sqlx::query_as(
+        "INSERT INTO social_groups (creator_id, name, category, is_public, member_count)
+         VALUES ($1, $2, '搭子局', false, 0)
+         RETURNING id",
+    )
+    .bind(creator_id)
+    .bind(title)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    // Step 2：创建搭子局，绑定 group_id
+    let gather = sqlx::query_as::<_, BuddyGather>(&format!(
         "INSERT INTO buddy_gathers
              (creator_id, title, location, start_time, end_time,
-              category, theme, capacity, description, vibes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+              category, theme, capacity, description, vibes, group_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
          RETURNING {GATHER_COLS}"
     ))
     .bind(creator_id)
@@ -47,9 +60,12 @@ pub async fn create(
     .bind(capacity)
     .bind(description)
     .bind(vibes)
+    .bind(group_id)
     .fetch_one(pool)
     .await
-    .map_err(AppError::Database)
+    .map_err(AppError::Database)?;
+
+    Ok(gather)
 }
 
 // ── 搭子局列表（分步查询，按分类分页）────────────────────────────────────────
@@ -176,6 +192,7 @@ pub async fn list(
                 description:      g.description,
                 vibes:            g.vibes,
                 status:           g.status,
+                group_id:         g.group_id,
                 created_at:       g.created_at,
                 joined_count:     count_map.get(&g.id).copied().unwrap_or(0),
                 is_joined:        joined_set.contains(&g.id),
@@ -265,6 +282,7 @@ pub async fn get(
         description: g.description,
         vibes: g.vibes,
         status: g.status,
+        group_id: g.group_id,
         created_at: g.created_at,
         joined_count,
         is_joined,
@@ -309,7 +327,7 @@ pub async fn join(
 
     // 检查是否已满
     let (joined_count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM buddy_gather_members WHERE gather_id = $1")
+        sqlx::query_as("SELECT COUNT(*)::BIGINT FROM buddy_gather_members WHERE gather_id = $1")
             .bind(gather_id)
             .fetch_one(pool)
             .await
@@ -336,6 +354,51 @@ pub async fn join(
             .map_err(AppError::Database)?;
     }
 
+    // 同步群聊成员
+    if let Some(group_id) = gather.group_id {
+        // 加入群聊
+        sqlx::query(
+            "INSERT INTO social_group_members (group_id, user_id)
+             VALUES ($1, $2)
+             ON CONFLICT DO NOTHING",
+        )
+        .bind(group_id)
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .map_err(AppError::Database)?;
+
+        // 更新群人数
+        sqlx::query("UPDATE social_groups SET member_count = member_count + 1 WHERE id = $1")
+            .bind(group_id)
+            .execute(pool)
+            .await
+            .map_err(AppError::Database)?;
+
+        // 查询用户名，发系统消息
+        let username: Option<(String,)> = sqlx::query_as(
+            "SELECT username FROM users WHERE id = $1",
+        )
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(AppError::Database)?;
+
+        let content = format!(
+            "{} 加入了搭子局",
+            username.map(|(u,)| u).unwrap_or_else(|| "新成员".to_string())
+        );
+        sqlx::query(
+            "INSERT INTO social_group_messages (group_id, sender_id, type, content)
+             VALUES ($1, NULL, 99, $2)",
+        )
+        .bind(group_id)
+        .bind(content)
+        .execute(pool)
+        .await
+        .map_err(AppError::Database)?;
+    }
+
     Ok(())
 }
 
@@ -346,6 +409,15 @@ pub async fn leave(
     gather_id: Uuid,
     user_id:   Uuid,
 ) -> AppResult<()> {
+    // 先获取搭子局（需要 group_id 和 status）
+    let gather: Option<BuddyGather> = sqlx::query_as::<_, BuddyGather>(&format!(
+        "SELECT {GATHER_COLS} FROM buddy_gathers WHERE id = $1"
+    ))
+    .bind(gather_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::Database)?;
+
     let result =
         sqlx::query("DELETE FROM buddy_gather_members WHERE gather_id = $1 AND user_id = $2")
             .bind(gather_id)
@@ -367,6 +439,53 @@ pub async fn leave(
     .execute(pool)
     .await
     .map_err(AppError::Database)?;
+
+    // 同步群聊成员
+    if let Some(gather) = gather {
+        if let Some(group_id) = gather.group_id {
+            // 退出群聊
+            sqlx::query(
+                "DELETE FROM social_group_members WHERE group_id = $1 AND user_id = $2",
+            )
+            .bind(group_id)
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .map_err(AppError::Database)?;
+
+            // 更新群人数（不低于 0）
+            sqlx::query(
+                "UPDATE social_groups SET member_count = GREATEST(member_count - 1, 0) WHERE id = $1",
+            )
+            .bind(group_id)
+            .execute(pool)
+            .await
+            .map_err(AppError::Database)?;
+
+            // 查询用户名，发系统消息
+            let username: Option<(String,)> = sqlx::query_as(
+                "SELECT username FROM users WHERE id = $1",
+            )
+            .bind(user_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(AppError::Database)?;
+
+            let content = format!(
+                "{} 退出了搭子局",
+                username.map(|(u,)| u).unwrap_or_else(|| "成员".to_string())
+            );
+            sqlx::query(
+                "INSERT INTO social_group_messages (group_id, sender_id, type, content)
+                 VALUES ($1, NULL, 99, $2)",
+            )
+            .bind(group_id)
+            .bind(content)
+            .execute(pool)
+            .await
+            .map_err(AppError::Database)?;
+        }
+    }
 
     Ok(())
 }

@@ -4,6 +4,8 @@
 //! - GET  /api/v1/im/conversations
 //! - POST /api/v1/im/conversations
 //! - GET  /api/v1/im/conversations/:id/messages
+//! - GET  /api/v1/im/groups
+//! - GET  /api/v1/im/groups/:id/messages
 //! - WS   /api/v1/im/ws
 
 use axum::{
@@ -23,7 +25,7 @@ use playmate_common::{
 };
 
 use crate::{
-    dto::{ConversationResponse, CreateConversationRequest, GetMessagesQuery, MessageResponse},
+    dto::{ConversationResponse, CreateConversationRequest, GetMessagesQuery, GroupMessageResponse, GroupSessionResponse, MessageResponse},
     protocol::{ClientMessage, ServerMessage},
     repository,
 };
@@ -93,6 +95,45 @@ pub async fn list_messages(
     let total = messages.len() as i64; // MVP 简化：不查 COUNT
 
     let items: Vec<MessageResponse> = messages.into_iter().map(Into::into).collect();
+    Ok(ApiResponse::ok(PageResponse {
+        has_more: items.len() as i64 == limit,
+        total,
+        page: q.page,
+        limit,
+        items,
+    }))
+}
+
+/// 获取当前用户的群聊列表（含搭子局群聊）
+pub async fn list_group_sessions(
+    State(state): State<AppState>,
+    current_user: CurrentUser,
+) -> Result<impl IntoResponse, AppError> {
+    let groups = repository::list_my_groups(&state.db, current_user.id).await?;
+    let items: Vec<GroupSessionResponse> = groups.into_iter().map(Into::into).collect();
+    Ok(ApiResponse::ok(items))
+}
+
+/// 获取群聊消息（分页，最新在前）
+///
+/// # 错误
+/// - `403 Forbidden` - 非群成员
+pub async fn list_group_messages(
+    State(state): State<AppState>,
+    current_user: CurrentUser,
+    Path(group_id): Path<Uuid>,
+    Query(q): Query<GetMessagesQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    if !repository::is_group_member(&state.db, group_id, current_user.id).await? {
+        return Err(AppError::Forbidden("非群成员".to_string()));
+    }
+
+    let limit = q.limit.clamp(1, 100);
+    let offset = (q.page - 1) * limit;
+    let messages = repository::list_group_messages(&state.db, group_id, limit, offset).await?;
+    let total = messages.len() as i64;
+
+    let items: Vec<GroupMessageResponse> = messages.into_iter().map(Into::into).collect();
     Ok(ApiResponse::ok(PageResponse {
         has_more: items.len() as i64 == limit,
         total,
@@ -241,12 +282,95 @@ async fn handle_client_message(state: &AppState, user: &CurrentUser, msg: Client
             }
         }
 
+        ClientMessage::SendGroupMessage {
+            group_id,
+            msg_type,
+            content,
+            media_url,
+        } => {
+            // 验证群成员身份
+            let ok = repository::is_group_member(&state.db, group_id, user.id)
+                .await
+                .unwrap_or(false);
+            if !ok {
+                let err = serde_json::to_string(&ServerMessage::Error {
+                    code: "FORBIDDEN".to_string(),
+                    message: "非群成员".to_string(),
+                })
+                .unwrap_or_default();
+                state.hub.send_to(&user.id, err);
+                return;
+            }
+
+            // 存库
+            let message = match repository::insert_group_message(
+                &state.db,
+                group_id,
+                Some(user.id),
+                msg_type,
+                content,
+                media_url,
+            )
+            .await
+            {
+                Ok(m) => m,
+                Err(e) => {
+                    tracing::error!("群消息存库失败: {:?}", e);
+                    let err = serde_json::to_string(&ServerMessage::MessageAck {
+                        message_id: Uuid::nil(),
+                        status: "failed".to_string(),
+                    })
+                    .unwrap_or_default();
+                    state.hub.send_to(&user.id, err);
+                    return;
+                }
+            };
+
+            // 给发送方发 Ack
+            let ack = serde_json::to_string(&ServerMessage::MessageAck {
+                message_id: message.id,
+                status: "delivered".to_string(),
+            })
+            .unwrap_or_default();
+            state.hub.send_to(&user.id, ack);
+
+            // 广播给所有群成员（含发送方，以便多端同步）
+            let push = serde_json::to_string(&ServerMessage::NewGroupMessage {
+                message_id: message.id,
+                group_id,
+                sender_id: Some(user.id),
+                sender_username: Some(user.username.clone()),
+                sender_avatar_url: None, // 头像由客户端通过 sender_id 缓存获取
+                msg_type: message.msg_type,
+                content: message.content,
+                media_url: message.media_url,
+                created_at: message.created_at,
+            })
+            .unwrap_or_default();
+
+            let members = repository::get_group_member_ids(&state.db, group_id)
+                .await
+                .unwrap_or_default();
+            for member_id in members {
+                state.hub.send_to(&member_id, push.clone());
+            }
+        }
+
         ClientMessage::MarkRead {
             conversation_id,
             last_read_at,
         } => {
             let _ =
                 repository::update_last_read(&state.db, conversation_id, user.id, last_read_at)
+                    .await;
+        }
+
+        ClientMessage::MarkGroupRead {
+            group_id,
+            last_read_at,
+        } => {
+            let _ =
+                repository::update_group_last_read(&state.db, group_id, user.id, last_read_at)
                     .await;
         }
 

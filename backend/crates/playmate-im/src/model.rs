@@ -24,3 +24,16 @@ pub struct Message {
     pub is_recalled:     bool,
     pub created_at:      DateTime<Utc>,
 }
+
+#[derive(Debug, FromRow)]
+pub struct GroupMessage {
+    pub id:         Uuid,
+    pub group_id:   Uuid,
+    pub sender_id:  Option<Uuid>,
+    #[sqlx(rename = "type")]
+    pub msg_type:   i16,
+    pub content:    Option<String>,
+    pub media_url:  Option<String>,
+    pub is_recalled: bool,
+    pub created_at: DateTime<Utc>,
+}
