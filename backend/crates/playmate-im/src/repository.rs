@@ -241,7 +241,7 @@ pub async fn list_messages(
         "SELECT id, conversation_id, sender_id, type, content, media_url, is_recalled, created_at
          FROM messages
          WHERE conversation_id = $1
-         ORDER BY created_at DESC
+         ORDER BY created_at ASC
          LIMIT $2 OFFSET $3",
     )
     .bind(conversation_id)
@@ -420,7 +420,7 @@ pub async fn list_group_messages(
         "SELECT id, group_id, sender_id, type, content, media_url, is_recalled, created_at
          FROM social_group_messages
          WHERE group_id = $1
-         ORDER BY created_at DESC
+         ORDER BY created_at ASC
          LIMIT $2 OFFSET $3",
     )
     .bind(group_id)
