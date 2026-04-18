@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/pm_image.dart';
-import '../../../auth/providers/auth_provider.dart';
+import '../../../../core/api/api_client.dart';
 import '../../data/im_model.dart';
 import '../../data/websocket_service.dart';
 import '../../providers/im_provider.dart';
