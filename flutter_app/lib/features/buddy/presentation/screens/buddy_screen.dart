@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../shared/widgets/pm_image.dart';
+import '../../../im/data/im_repository.dart';
 import '../../data/gather_model.dart';
 import '../../data/gather_repository.dart';
 import '../../providers/gather_provider.dart';
@@ -119,6 +120,25 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
     _searchCtrl.clear();
     _searchFocus.unfocus();
     setState(() { _searchActive = false; _hasResults = false; _searchResult = null; });
+  }
+
+  // 从搜索结果直接发起私信（创建会话后跳转）
+  Future<void> _startChat(SearchUser user) async {
+    try {
+      final convId = await ref.read(imRepositoryProvider).createConversation(user.id);
+      if (mounted) {
+        context.push('/im/chat/$convId', extra: {
+          'username': user.username,
+          'otherAvatarUrl': user.avatarUrl,
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('创建会话失败，请重试')),
+        );
+      }
+    }
   }
 
   @override
@@ -258,7 +278,14 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
                 children: result.users
                     .map((u) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
-                          child: _SearchUserCard(user: u),
+                          child: _SearchUserCard(
+                            user: u,
+                            onTap: () => context.push('/buddy/user/${u.id}', extra: {
+                              'username': u.username,
+                              'avatarUrl': u.avatarUrl,
+                            }),
+                            onChat: () => _startChat(u),
+                          ),
                         ))
                     .toList(),
               ),
@@ -288,7 +315,22 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
                 children: result.gathers
                     .map((g) => Padding(
                           padding: const EdgeInsets.only(bottom: 10),
-                          child: _SearchGatherCard(gather: g),
+                          child: _SearchGatherCard(
+                            gather: g,
+                            onTap: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                useRootNavigator: true,
+                                enableDrag: false,
+                                backgroundColor: Colors.transparent,
+                                builder: (_) => _GatherDetailSheet(
+                                  item: g,
+                                  firstMenuId: g.firstMenuId,
+                                ),
+                              );
+                            },
+                          ),
                         ))
                     .toList(),
               ),
@@ -2201,8 +2243,10 @@ class _PersonCell extends StatelessWidget {
 // ═════════════════════════════════════════════════════════════════════════════
 
 class _SearchUserCard extends StatelessWidget {
-  const _SearchUserCard({required this.user});
+  const _SearchUserCard({required this.user, this.onTap, this.onChat});
   final SearchUser user;
+  final VoidCallback? onTap;
+  final VoidCallback? onChat;
 
   // 根据 id 哈希取固定颜色，避免每次渲染跳色
   static const _colors = [
@@ -2217,7 +2261,9 @@ class _SearchUserCard extends StatelessWidget {
     final desc = user.bio?.isNotEmpty == true ? user.bio! : '期待与你相遇';
     final meta = user.city ?? '未知城市';
 
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -2287,10 +2333,13 @@ class _SearchUserCard extends StatelessWidget {
                   children: [
                     Text(meta, style: const TextStyle(fontSize: 11, color: Color(0xFFBBBBBB))),
                     const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                      decoration: BoxDecoration(color: const Color(0xFFFF8C42), borderRadius: BorderRadius.circular(10)),
-                      child: const Text('打招呼', style: TextStyle(fontSize: 12, color: Colors.white)),
+                    GestureDetector(
+                      onTap: onChat,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                        decoration: BoxDecoration(color: const Color(0xFFFF8C42), borderRadius: BorderRadius.circular(10)),
+                        child: const Text('打招呼', style: TextStyle(fontSize: 12, color: Colors.white)),
+                      ),
                     ),
                   ],
                 ),
@@ -2298,6 +2347,7 @@ class _SearchUserCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -2308,8 +2358,9 @@ class _SearchUserCard extends StatelessWidget {
 // ═════════════════════════════════════════════════════════════════════════════
 
 class _SearchGatherCard extends StatelessWidget {
-  const _SearchGatherCard({required this.gather});
+  const _SearchGatherCard({required this.gather, this.onTap});
   final Gather gather;
+  final VoidCallback? onTap;
 
   static const _memberBgColors = [
     Color(0xFFFDE68A), Color(0xFFD9F99D), Color(0xFFBFDBFE),
@@ -2325,7 +2376,9 @@ class _SearchGatherCard extends StatelessWidget {
     final extra = gather.location != null ? ' · ${gather.location}' : '';
     final remaining = gather.capacity - gather.joinedCount;
 
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -2403,18 +2456,22 @@ class _SearchGatherCard extends StatelessWidget {
               const SizedBox(width: 8),
               Text('还差 $remaining 人', style: const TextStyle(fontSize: 11, color: Color(0xFFBBBBBB))),
               const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: gather.isFull ? const Color(0xFFF0F0F0) : const Color(0xFFFF8C42),
-                  borderRadius: BorderRadius.circular(10),
+              GestureDetector(
+                onTap: gather.isFull ? null : onTap,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: gather.isFull ? const Color(0xFFF0F0F0) : const Color(0xFFFF8C42),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(gather.isFull ? '已满员' : '我要加入',
+                      style: TextStyle(fontSize: 12, color: gather.isFull ? const Color(0xFF999999) : Colors.white)),
                 ),
-                child: Text(gather.isFull ? '已满员' : '我要加入',
-                    style: TextStyle(fontSize: 12, color: gather.isFull ? const Color(0xFF999999) : Colors.white)),
               ),
             ],
           ),
         ],
+      ),
       ),
     );
   }

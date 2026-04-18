@@ -1,18 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../shared/widgets/pm_image.dart';
 import '../../../../shared/widgets/pm_swipe_back.dart';
+import '../../../im/data/im_repository.dart';
 
 /// 搭子用户详情页
-class BuddyUserDetailScreen extends StatefulWidget {
-  const BuddyUserDetailScreen({super.key, this.userId});
+class BuddyUserDetailScreen extends ConsumerStatefulWidget {
+  const BuddyUserDetailScreen({
+    super.key,
+    this.userId,
+    this.username,
+    this.avatarUrl,
+  });
   final String? userId;
+  final String? username;
+  final String? avatarUrl;
 
   @override
-  State<BuddyUserDetailScreen> createState() => _BuddyUserDetailScreenState();
+  ConsumerState<BuddyUserDetailScreen> createState() => _BuddyUserDetailScreenState();
 }
 
-class _BuddyUserDetailScreenState extends State<BuddyUserDetailScreen>
+class _BuddyUserDetailScreenState extends ConsumerState<BuddyUserDetailScreen>
     with SingleTickerProviderStateMixin {
+  bool _chatLoading = false;
   late final TabController _tabController;
   int _selectedTab = 1; // 默认选中"遛宠搭子陪伴"
 
@@ -34,6 +45,28 @@ class _BuddyUserDetailScreenState extends State<BuddyUserDetailScreen>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _startChat() async {
+    if (widget.userId == null) return;
+    setState(() => _chatLoading = true);
+    final router = GoRouter.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final convId = await ref.read(imRepositoryProvider).createConversation(widget.userId!);
+      if (mounted) {
+        router.push('/im/chat/$convId', extra: {
+          'username': widget.username,
+          'otherAvatarUrl': widget.avatarUrl,
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        messenger.showSnackBar(const SnackBar(content: Text('创建会话失败，请重试')));
+      }
+    } finally {
+      if (mounted) setState(() => _chatLoading = false);
+    }
   }
 
   @override
@@ -120,12 +153,20 @@ class _BuddyUserDetailScreenState extends State<BuddyUserDetailScreen>
           // 头像
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: PmImage(
-              'https://picsum.photos/seed/user_ya/200/200',
-              width: 86,
-              height: 86,
-              fit: BoxFit.cover,
-            ),
+            child: widget.avatarUrl != null
+                ? PmImage(widget.avatarUrl!, width: 86, height: 86, fit: BoxFit.cover)
+                : Container(
+                    width: 86, height: 86,
+                    decoration: const BoxDecoration(color: Color(0xFFFF8C42)),
+                    child: Center(
+                      child: Text(
+                        widget.username?.isNotEmpty == true
+                            ? widget.username![0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -133,9 +174,9 @@ class _BuddyUserDetailScreenState extends State<BuddyUserDetailScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 名字
-                const Text(
-                  '阿雅',
-                  style: TextStyle(
+                Text(
+                  widget.username ?? '搭伴用户',
+                  style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
                     color: Color(0xFF2C2C2A),
@@ -505,7 +546,7 @@ class _BuddyUserDetailScreenState extends State<BuddyUserDetailScreen>
           // 私信按钮
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: () {},
+              onPressed: _chatLoading ? null : _startChat,
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFFFF7A00),
                 side: const BorderSide(color: Color(0xFFFF7A00)),

@@ -192,7 +192,14 @@ final routerProvider = Provider<GoRouter>((ref) {
               path:    '/buddy',
               builder: (_, _) => const BuddyScreen(),
               routes: [
-                GoRoute(path: 'user/:id',    builder: (_, state) => BuddyUserDetailScreen(userId: state.pathParameters['id'])),
+                GoRoute(path: 'user/:id',    builder: (_, state) {
+                  final extra = state.extra as Map<String, dynamic>?;
+                  return BuddyUserDetailScreen(
+                    userId:    state.pathParameters['id'],
+                    username:  extra?['username'] as String?,
+                    avatarUrl: extra?['avatarUrl'] as String?,
+                  );
+                }),
                 GoRoute(path: 'candidates',  builder: (_, _) => const OnlineMatchScreen()),
                 GoRoute(path: 'invitations', builder: (_, _) => const PmPlaceholderScreen(title: '邀约管理')),
                 GoRoute(path: 'career',      builder: (_, _) => const CareerMatchScreen()),
