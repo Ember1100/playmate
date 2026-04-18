@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../shared/widgets/pm_image.dart';
+import '../../../auth/providers/auth_provider.dart';
 import '../../data/im_model.dart';
+import '../../data/websocket_service.dart';
 import '../../providers/im_provider.dart';
 
 class ImScreen extends ConsumerStatefulWidget {
@@ -19,6 +23,8 @@ class _ImScreenState extends ConsumerState<ImScreen>
   late final TabController _tabController;
 
   // ── 编辑模式 ──────────────────────────────────────────────────────────────
+  StreamSubscription<Map<String, dynamic>>? _wsSub;
+
   bool _editMode = false;
   final Set<String> _selected = {};
 
@@ -85,10 +91,28 @@ class _ImScreenState extends ConsumerState<ImScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: _tabs.length, vsync: this);
+    _initWebSocket();
+  }
+
+  Future<void> _initWebSocket() async {
+    final tokenStorage = ref.read(tokenStorageProvider);
+    final token = await tokenStorage.getAccessToken();
+    if (token == null) return;
+    final wsService = ref.read(wsServiceProvider);
+    await wsService.connect(token);
+    _wsSub = wsService.messages.listen((data) {
+      final type = data['type'] as String?;
+      if (type == 'new_message') {
+        ref.read(conversationsProvider.notifier).refresh();
+      } else if (type == 'new_group_message') {
+        ref.read(groupSessionsProvider.notifier).refresh();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _wsSub?.cancel();
     _tabController.dispose();
     super.dispose();
   }

@@ -88,6 +88,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   }
 
   void _markRead() {
+    // 乐观清零本地未读数，避免退出时 refresh() 竞态覆盖
+    ref.read(groupSessionsProvider.notifier).clearGroupUnread(widget.groupId);
     ref.read(wsServiceProvider).sendMessage({
       'type': 'mark_group_read',
       'group_id': widget.groupId,
@@ -100,7 +102,6 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     _wsSub?.cancel();
     _textController.dispose();
     _scrollController.dispose();
-    ref.read(groupSessionsProvider.notifier).refresh();
     super.dispose();
   }
 

@@ -112,8 +112,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _wsSub?.cancel();
     _textController.dispose();
     _scrollController.dispose();
-    // 离开聊天时刷新会话列表，让未读数和最新消息保持准确
-    ref.read(conversationsProvider.notifier).refresh();
     super.dispose();
   }
 

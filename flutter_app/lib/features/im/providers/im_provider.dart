@@ -53,6 +53,24 @@ class GroupSessionsNotifier extends AsyncNotifier<List<GroupSession>> {
       () => ref.read(imRepositoryProvider).getGroupSessions(),
     );
   }
+
+  /// 进入群聊时乐观清零未读数
+  void clearGroupUnread(String groupId) {
+    state.whenData((list) {
+      state = AsyncData(list.map((g) {
+        if (g.id != groupId) return g;
+        return GroupSession(
+          id: g.id,
+          name: g.name,
+          avatarUrl: g.avatarUrl,
+          lastMessage: g.lastMessage,
+          lastMessageAt: g.lastMessageAt,
+          unreadCount: 0,
+          memberCount: g.memberCount,
+        );
+      }).toList());
+    });
+  }
 }
 
 final groupSessionsProvider =
