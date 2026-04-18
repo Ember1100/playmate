@@ -81,7 +81,8 @@ pub struct BuddyGatherWithStats {
     pub status:            i16,
     pub group_id:          Option<Uuid>,
     pub created_at:        DateTime<Utc>,
-    pub joined_count:      i64,
-    pub is_joined:         bool,
-    pub member_avatars:    Vec<String>,
+    pub joined_count:       i64,
+    pub is_joined:          bool,
+    pub member_avatars:     Vec<String>,  // 有头像的 URL（可能比 joined_count 少）
+    pub member_usernames:   Vec<String>,  // 与 member_avatars 一一对应（无头像时为空串）
 }

@@ -171,23 +171,24 @@ pub async fn list(
     .map_err(AppError::Database)?;
     let joined_set: HashSet<Uuid> = joined.into_iter().map(|(id,)| id).collect();
 
-    // Step 7：成员头像（最多 5 张）
-    let avatar_rows: Vec<(Uuid, String)> = sqlx::query_as(
-        "SELECT bgm.gather_id, u.avatar_url
+    // Step 7：成员信息（最多 5 人，含无头像用户）
+    let member_rows: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
+        "SELECT bgm.gather_id, u.username, u.avatar_url
          FROM buddy_gather_members bgm
          JOIN users u ON u.id = bgm.user_id
-         WHERE bgm.gather_id = ANY($1) AND u.avatar_url IS NOT NULL
+         WHERE bgm.gather_id = ANY($1)
          ORDER BY bgm.joined_at",
     )
     .bind(&gather_ids)
     .fetch_all(pool)
     .await
     .map_err(AppError::Database)?;
-    let mut avatars_map: HashMap<Uuid, Vec<String>> = HashMap::new();
-    for (gather_id, avatar) in avatar_rows {
-        let v = avatars_map.entry(gather_id).or_default();
+    // gather_id → Vec<(username, avatar_url)>
+    let mut members_map: HashMap<Uuid, Vec<(String, Option<String>)>> = HashMap::new();
+    for (gather_id, username, avatar) in member_rows {
+        let v = members_map.entry(gather_id).or_default();
         if v.len() < 5 {
-            v.push(avatar);
+            v.push((username, avatar));
         }
     }
 
@@ -201,6 +202,9 @@ pub async fn list(
                 .unwrap_or_else(|| ("未知用户".to_string(), None));
             let first_menu_name  = g.first_menu_id.and_then(|id| menu_name_map.get(&id).cloned());
             let second_menu_name = g.second_menu_id.and_then(|id| menu_name_map.get(&id).cloned());
+            let members = members_map.remove(&g.id).unwrap_or_default();
+            let member_avatars   = members.iter().map(|(_, av)| av.clone().unwrap_or_default()).collect();
+            let member_usernames = members.into_iter().map(|(un, _)| un).collect();
             BuddyGatherWithStats {
                 id:               g.id,
                 creator_id:       g.creator_id,
@@ -222,7 +226,8 @@ pub async fn list(
                 created_at:       g.created_at,
                 joined_count:     count_map.get(&g.id).copied().unwrap_or(0),
                 is_joined:        joined_set.contains(&g.id),
-                member_avatars:   avatars_map.remove(&g.id).unwrap_or_default(),
+                member_avatars,
+                member_usernames,
             }
         })
         .collect();
@@ -297,12 +302,12 @@ pub async fn get(
     .map_err(AppError::Database)?
     .0;
 
-    // Step 6：成员头像（最多 5 张）
-    let avatar_rows: Vec<(String,)> = sqlx::query_as(
-        "SELECT u.avatar_url
+    // Step 6：成员信息（最多 5 人，含无头像用户）
+    let member_rows: Vec<(String, Option<String>)> = sqlx::query_as(
+        "SELECT u.username, u.avatar_url
          FROM buddy_gather_members bgm
          JOIN users u ON u.id = bgm.user_id
-         WHERE bgm.gather_id = $1 AND u.avatar_url IS NOT NULL
+         WHERE bgm.gather_id = $1
          ORDER BY bgm.joined_at
          LIMIT 5",
     )
@@ -310,7 +315,8 @@ pub async fn get(
     .fetch_all(pool)
     .await
     .map_err(AppError::Database)?;
-    let member_avatars: Vec<String> = avatar_rows.into_iter().map(|(a,)| a).collect();
+    let member_avatars:   Vec<String> = member_rows.iter().map(|(_, av)| av.clone().unwrap_or_default()).collect();
+    let member_usernames: Vec<String> = member_rows.into_iter().map(|(un, _)| un).collect();
 
     Ok(BuddyGatherWithStats {
         id: g.id,
@@ -334,6 +340,7 @@ pub async fn get(
         joined_count,
         is_joined,
         member_avatars,
+        member_usernames,
     })
 }
 

@@ -22,6 +22,7 @@ class Gather {
     required this.joinedCount,
     required this.isJoined,
     required this.memberAvatars,
+    required this.memberUsernames,
     required this.createdAt,
   });
 
@@ -44,7 +45,8 @@ class Gather {
   final String? groupId;
   final int joinedCount;
   final bool isJoined;
-  final List<String> memberAvatars;
+  final List<String> memberAvatars;     // 与 memberUsernames 一一对应，无头像时为空串
+  final List<String> memberUsernames;   // 参加成员用户名（最多 5 人）
   final DateTime createdAt;
 
   bool get isFull => joinedCount >= capacity;
@@ -85,11 +87,12 @@ class Gather {
       joinedCount:      json['joined_count'] as int,
       isJoined:         json['is_joined'] as bool? ?? false,
       memberAvatars:    (json['member_avatars'] as List<dynamic>? ?? []).cast<String>(),
+      memberUsernames:  (json['member_usernames'] as List<dynamic>? ?? []).cast<String>(),
       createdAt:        DateTime.parse(json['created_at'] as String).toLocal(),
     );
   }
 
-  Gather copyWith({int? joinedCount, bool? isJoined, List<String>? memberAvatars}) {
+  Gather copyWith({int? joinedCount, bool? isJoined, List<String>? memberAvatars, List<String>? memberUsernames}) {
     return Gather(
       id:              id,
       creatorId:       creatorId,
@@ -110,8 +113,9 @@ class Gather {
       groupId:         groupId,
       joinedCount:     joinedCount ?? this.joinedCount,
       isJoined:        isJoined ?? this.isJoined,
-      memberAvatars:   memberAvatars ?? this.memberAvatars,
-      createdAt:       createdAt,
+      memberAvatars:    memberAvatars ?? this.memberAvatars,
+      memberUsernames:  memberUsernames ?? this.memberUsernames,
+      createdAt:        createdAt,
     );
   }
 }

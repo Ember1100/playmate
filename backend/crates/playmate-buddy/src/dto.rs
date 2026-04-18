@@ -206,10 +206,11 @@ pub struct GatherResponse {
     pub vibes:            Vec<String>,
     pub status:           i16,
     pub group_id:         Option<String>,
-    pub joined_count:     i64,
-    pub is_joined:        bool,
-    pub member_avatars:   Vec<String>,
-    pub created_at:       DateTime<Utc>,
+    pub joined_count:      i64,
+    pub is_joined:         bool,
+    pub member_avatars:    Vec<String>,
+    pub member_usernames:  Vec<String>,
+    pub created_at:        DateTime<Utc>,
 }
 
 impl From<BuddyGatherWithStats> for GatherResponse {
@@ -235,6 +236,7 @@ impl From<BuddyGatherWithStats> for GatherResponse {
             joined_count:     g.joined_count,
             is_joined:        g.is_joined,
             member_avatars:   g.member_avatars,
+            member_usernames: g.member_usernames,
             created_at:       g.created_at,
         }
     }

@@ -848,12 +848,20 @@ class _GatherCard extends StatelessWidget {
   final Gather item;
   final VoidCallback onTap;
 
-  String _fmt(DateTime dt) {
+  String _fmtDate(DateTime dt) {
     final mo = dt.month.toString().padLeft(2, '0');
     final d  = dt.day.toString().padLeft(2, '0');
-    final h  = dt.hour.toString().padLeft(2, '0');
-    final mi = dt.minute.toString().padLeft(2, '0');
-    return '${dt.year}年${mo}月${d}日 $h:$mi';
+    return '${dt.year}年${mo}月${d}日';
+  }
+
+  String _fmtTime(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+  // 同一天 → 显示"4月18日 15:56 - 17:56"；跨天 → 显示完整开始时间
+  String _fmtRange(DateTime start, DateTime end) {
+    final sameDay = start.year == end.year && start.month == end.month && start.day == end.day;
+    if (sameDay) return '${_fmtDate(start)}  ${_fmtTime(start)} - ${_fmtTime(end)}';
+    return '${_fmtDate(start)} ${_fmtTime(start)}';
   }
 
   @override
@@ -900,20 +908,17 @@ class _GatherCard extends StatelessWidget {
             ]),
             const SizedBox(height: 8),
           ],
-          // ── 开始时间 ──────────────────────────────────────────────────
+          // ── 时间 ─────────────────────────────────────────────────────
           Row(children: [
-            const Icon(Icons.play_circle_fill, size: 14, color: Color(0xFF4ADE80)),
+            const Icon(Icons.access_time, size: 14, color: Color(0xFF4ADE80)),
             const SizedBox(width: 6),
-            Text('开始：', style: const TextStyle(fontSize: 13, color: Color(0xFF555555))),
-            Text(_fmt(item.startTime), style: const TextStyle(fontSize: 13, color: Color(0xFF555555))),
-          ]),
-          const SizedBox(height: 8),
-          // ── 结束时间 ──────────────────────────────────────────────────
-          Row(children: [
-            const Icon(Icons.stop_circle, size: 14, color: Color(0xFFF87171)),
-            const SizedBox(width: 6),
-            Text('结束：', style: const TextStyle(fontSize: 13, color: Color(0xFF555555))),
-            Text(_fmt(item.endTime), style: const TextStyle(fontSize: 13, color: Color(0xFF555555))),
+            Expanded(
+              child: Text(
+                _fmtRange(item.startTime, item.endTime),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF555555)),
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ]),
           const SizedBox(height: 14),
           // ── 底部：头像 + 人数 + 参加按钮 ─────────────────────────────
@@ -1113,12 +1118,41 @@ class _GatherDetailSheet extends ConsumerWidget {
   final Gather item;
   final int? firstMenuId;
 
-  String _fmt(DateTime dt) {
-    return '${dt.year}年${dt.month.toString().padLeft(2, '0')}月'
-        '${dt.day.toString().padLeft(2, '0')}日 '
-        '${dt.hour.toString().padLeft(2, '0')}:'
-        '${dt.minute.toString().padLeft(2, '0')}:'
-        '${dt.second.toString().padLeft(2, '0')}';
+  String _fmtTime(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+  String _fmtDate(DateTime dt) =>
+      '${dt.year}年${dt.month.toString().padLeft(2, '0')}月${dt.day.toString().padLeft(2, '0')}日';
+
+  // 时间区间：同一天 → 一行显示"4月18日 15:56 - 17:56"；跨天 → 各自完整
+  Widget _buildTimeRange(DateTime start, DateTime end) {
+    final sameDay = start.year == end.year &&
+        start.month == end.month &&
+        start.day == end.day;
+    if (sameDay) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.play_circle_outline, size: 20, color: Color(0xFF5DCAA5)),
+            const SizedBox(width: 10),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('活动时间', style: TextStyle(fontSize: 12, color: Color(0xFF999999))),
+              const SizedBox(height: 2),
+              Text(
+                '${_fmtDate(start)}  ${_fmtTime(start)} - ${_fmtTime(end)}',
+                style: const TextStyle(fontSize: 14, color: Color(0xFF333333), fontWeight: FontWeight.w500),
+              ),
+            ]),
+          ]),
+        ],
+      );
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _DetailRow(icon: Icons.play_circle_outline, iconColor: const Color(0xFF5DCAA5), label: '开始时间', value: '${_fmtDate(start)} ${_fmtTime(start)}'),
+      const SizedBox(height: 16),
+      _DetailRow(icon: Icons.stop_circle_outlined, iconColor: const Color(0xFFE24B4A), label: '结束时间', value: '${_fmtDate(end)} ${_fmtTime(end)}'),
+    ]);
   }
 
   @override
@@ -1169,9 +1203,7 @@ class _GatherDetailSheet extends ConsumerWidget {
                 if (current.location != null)
                   _DetailRow(icon: Icons.location_on_outlined, iconColor: const Color(0xFFFF7A00), label: '活动地点', value: current.location!),
                 if (current.location != null) const SizedBox(height: 16),
-                _DetailRow(icon: Icons.play_circle_outline, iconColor: const Color(0xFF5DCAA5), label: '开始时间', value: _fmt(current.startTime)),
-                const SizedBox(height: 16),
-                _DetailRow(icon: Icons.stop_circle_outlined, iconColor: const Color(0xFFE24B4A), label: '结束时间', value: _fmt(current.endTime)),
+                _buildTimeRange(current.startTime, current.endTime),
                 if (current.description != null && current.description!.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   _DetailRow(icon: Icons.notes_outlined, iconColor: const Color(0xFF9C27B0), label: '活动说明', value: current.description!),
@@ -1189,10 +1221,33 @@ class _GatherDetailSheet extends ConsumerWidget {
                 const Text('参加的搭子', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF333333))),
                 const SizedBox(height: 12),
                 Row(children: [
-                  ...current.memberAvatars.map((url) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Container(width: 40, height: 40, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFFEEEEEE), width: 2)), child: ClipOval(child: PmImage(url, width: 40, height: 40, fit: BoxFit.cover))),
-                  )),
+                  // 已参加成员（有头像 → 图片；无头像 → 用户名首字母彩色圆）
+                  ...List.generate(current.memberUsernames.length, (i) {
+                    final username = current.memberUsernames[i];
+                    final avatarUrl = i < current.memberAvatars.length ? current.memberAvatars[i] : '';
+                    final initial = username.isNotEmpty ? username[0] : '?';
+                    final colors = [
+                      const Color(0xFF7F77DD), const Color(0xFF4ECDC4),
+                      const Color(0xFFFF6B6B), const Color(0xFFFFBE0B),
+                      const Color(0xFF5DCAA5),
+                    ];
+                    final bgColor = colors[i % colors.length];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: avatarUrl.isNotEmpty
+                          ? Container(
+                              width: 40, height: 40,
+                              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFFEEEEEE), width: 2)),
+                              child: ClipOval(child: PmImage(avatarUrl, width: 40, height: 40, fit: BoxFit.cover)),
+                            )
+                          : CircleAvatar(
+                              radius: 20,
+                              backgroundColor: bgColor,
+                              child: Text(initial, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                            ),
+                    );
+                  }),
+                  // 空余名额（最多显示 3 个）
                   ...List.generate((current.capacity - current.joinedCount).clamp(0, 3), (_) => Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: Container(width: 40, height: 40, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFFDDDDDD), width: 1.5), color: const Color(0xFFF5F5F5)), child: const Icon(Icons.add, size: 18, color: Color(0xFFCCCCCC))),
