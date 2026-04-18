@@ -69,32 +69,59 @@ pub struct InvitationsQuery {
 #[derive(Deserialize, Validate)]
 pub struct CreateGatherRequest {
     #[validate(length(min = 1, max = 100))]
-    pub title:       String,
+    pub title:          String,
     #[validate(length(max = 200))]
-    pub location:    Option<String>,
-    pub start_time:  DateTime<Utc>,
-    pub end_time:    DateTime<Utc>,
-    pub category:    String, // 生活/学习/兴趣/游戏/自定义
-    pub theme:       String, // 吃货/看看/运动/游戏/其他
+    pub location:       Option<String>,
+    pub start_time:     DateTime<Utc>,
+    pub end_time:       DateTime<Utc>,
+    pub first_menu_id:  Option<i64>,
+    pub second_menu_id: Option<i64>,
     #[validate(range(min = 2, max = 50))]
-    pub capacity:    i32,
+    pub capacity:       i32,
     #[validate(length(max = 1000))]
-    pub description: Option<String>,
+    pub description:    Option<String>,
     #[serde(default)]
-    pub vibes:       Vec<String>,
+    pub vibes:          Vec<String>,
 }
 
 #[derive(Deserialize)]
 pub struct GatherListQuery {
-    pub category: Option<String>,
+    pub first_menu_id: Option<i64>,
     #[serde(default = "default_page")]
-    pub page:     i64,
+    pub page:          i64,
     #[serde(default = "default_limit")]
-    pub limit:    i64,
+    pub limit:         i64,
 }
+
+// ── 菜单 Request ──────────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct MenuQuery {
+    #[serde(rename = "type", default = "default_menu_type")]
+    pub menu_type: i16,
+}
+
+fn default_menu_type() -> i16 { 1 }
 
 fn default_page() -> i64 { 1 }
 fn default_limit() -> i64 { 20 }
+
+// ── 菜单 Response ─────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct SubMenuItemResponse {
+    pub id:   i64,
+    pub name: String,
+    pub sort: i32,
+}
+
+#[derive(Serialize)]
+pub struct MenuItemResponse {
+    pub id:       i64,
+    pub name:     String,
+    pub sort:     i32,
+    pub children: Vec<SubMenuItemResponse>,
+}
 
 // ── Responses ─────────────────────────────────────────────────────────────────
 
@@ -170,8 +197,10 @@ pub struct GatherResponse {
     pub location:         Option<String>,
     pub start_time:       DateTime<Utc>,
     pub end_time:         DateTime<Utc>,
-    pub category:         String,
-    pub theme:            String,
+    pub first_menu_id:    Option<i64>,
+    pub first_menu_name:  Option<String>,
+    pub second_menu_id:   Option<i64>,
+    pub second_menu_name: Option<String>,
     pub capacity:         i32,
     pub description:      Option<String>,
     pub vibes:            Vec<String>,
@@ -194,8 +223,10 @@ impl From<BuddyGatherWithStats> for GatherResponse {
             location:         g.location,
             start_time:       g.start_time,
             end_time:         g.end_time,
-            category:         g.category,
-            theme:            g.theme,
+            first_menu_id:    g.first_menu_id,
+            first_menu_name:  g.first_menu_name,
+            second_menu_id:   g.second_menu_id,
+            second_menu_name: g.second_menu_name,
             capacity:         g.capacity,
             description:      g.description,
             vibes:            g.vibes,

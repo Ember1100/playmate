@@ -13,22 +13,22 @@ use crate::model::{BuddyGather, BuddyGatherWithStats};
 
 const GATHER_COLS: &str =
     "id, creator_id, title, location, start_time, end_time,
-     category, theme, capacity, description, vibes, status, group_id, created_at";
+     first_menu_id, second_menu_id, capacity, description, vibes, status, group_id, created_at";
 
 // ── 创建搭子局 ────────────────────────────────────────────────────────────────
 
 pub async fn create(
-    pool:        &PgPool,
-    creator_id:  Uuid,
-    title:       &str,
-    location:    Option<&str>,
-    start_time:  chrono::DateTime<chrono::Utc>,
-    end_time:    chrono::DateTime<chrono::Utc>,
-    category:    &str,
-    theme:       &str,
-    capacity:    i32,
-    description: Option<&str>,
-    vibes:       &[String],
+    pool:           &PgPool,
+    creator_id:     Uuid,
+    title:          &str,
+    location:       Option<&str>,
+    start_time:     chrono::DateTime<chrono::Utc>,
+    end_time:       chrono::DateTime<chrono::Utc>,
+    first_menu_id:  Option<i64>,
+    second_menu_id: Option<i64>,
+    capacity:       i32,
+    description:    Option<&str>,
+    vibes:          &[String],
 ) -> AppResult<BuddyGather> {
     // Step 1：创建对应的群聊
     let (group_id,): (Uuid,) = sqlx::query_as(
@@ -46,7 +46,7 @@ pub async fn create(
     let gather = sqlx::query_as::<_, BuddyGather>(&format!(
         "INSERT INTO buddy_gathers
              (creator_id, title, location, start_time, end_time,
-              category, theme, capacity, description, vibes, group_id)
+              first_menu_id, second_menu_id, capacity, description, vibes, group_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
          RETURNING {GATHER_COLS}"
     ))
@@ -55,8 +55,8 @@ pub async fn create(
     .bind(location)
     .bind(start_time)
     .bind(end_time)
-    .bind(category)
-    .bind(theme)
+    .bind(first_menu_id)
+    .bind(second_menu_id)
     .bind(capacity)
     .bind(description)
     .bind(vibes)
@@ -68,23 +68,23 @@ pub async fn create(
     Ok(gather)
 }
 
-// ── 搭子局列表（分步查询，按分类分页）────────────────────────────────────────
+// ── 搭子局列表（分步查询，按一级菜单分页）────────────────────────────────────
 
 pub async fn list(
     pool:            &PgPool,
     current_user_id: Uuid,
-    category:        Option<&str>,
+    first_menu_id:   Option<i64>,
     limit:           i64,
     offset:          i64,
 ) -> AppResult<Vec<BuddyGatherWithStats>> {
-    // Step 1：单表查询 buddy_gathers，获取基础数据
-    let gathers: Vec<BuddyGather> = match category {
-        Some(cat) => sqlx::query_as::<_, BuddyGather>(&format!(
+    // Step 1：单表查询 buddy_gathers
+    let gathers: Vec<BuddyGather> = match first_menu_id {
+        Some(mid) => sqlx::query_as::<_, BuddyGather>(&format!(
             "SELECT {GATHER_COLS} FROM buddy_gathers
-             WHERE status = 0 AND category = $1
+             WHERE status = 0 AND first_menu_id = $1
              ORDER BY created_at DESC LIMIT $2 OFFSET $3"
         ))
-        .bind(cat)
+        .bind(mid)
         .bind(limit)
         .bind(offset)
         .fetch_all(pool)
@@ -107,11 +107,19 @@ pub async fn list(
         return Ok(vec![]);
     }
 
-    // Step 2：收集 gather_id 和 creator_id
+    // Step 2：收集 IDs
     let gather_ids: Vec<Uuid> = gathers.iter().map(|g| g.id).collect();
     let creator_ids: Vec<Uuid> = gathers.iter().map(|g| g.creator_id).collect();
 
-    // Step 3：查询创建者信息（id → username, avatar_url）
+    // 收集需要查询名称的 menu_id
+    let mut menu_ids: Vec<i64> = Vec::new();
+    for g in &gathers {
+        if let Some(id) = g.first_menu_id  { menu_ids.push(id); }
+        if let Some(id) = g.second_menu_id { menu_ids.push(id); }
+    }
+    menu_ids.dedup();
+
+    // Step 3：查询创建者信息
     let creators: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
         "SELECT id, username, avatar_url FROM users WHERE id = ANY($1)",
     )
@@ -124,7 +132,21 @@ pub async fn list(
         .map(|(id, username, avatar)| (id, (username, avatar)))
         .collect();
 
-    // Step 4：查询各搭子局的参与人数
+    // Step 4：查询菜单名称
+    let menu_name_map: HashMap<i64, String> = if !menu_ids.is_empty() {
+        let rows: Vec<(i64, String)> = sqlx::query_as(
+            "SELECT id, name FROM menus WHERE id = ANY($1)",
+        )
+        .bind(&menu_ids)
+        .fetch_all(pool)
+        .await
+        .map_err(AppError::Database)?;
+        rows.into_iter().collect()
+    } else {
+        HashMap::new()
+    };
+
+    // Step 5：参与人数
     let counts: Vec<(Uuid, i64)> = sqlx::query_as(
         "SELECT gather_id, COUNT(*)::BIGINT
          FROM buddy_gather_members
@@ -137,7 +159,7 @@ pub async fn list(
     .map_err(AppError::Database)?;
     let count_map: HashMap<Uuid, i64> = counts.into_iter().collect();
 
-    // Step 5：查询当前用户已参加哪些搭子局
+    // Step 6：当前用户已参加哪些
     let joined: Vec<(Uuid,)> = sqlx::query_as(
         "SELECT gather_id FROM buddy_gather_members
          WHERE gather_id = ANY($1) AND user_id = $2",
@@ -149,7 +171,7 @@ pub async fn list(
     .map_err(AppError::Database)?;
     let joined_set: HashSet<Uuid> = joined.into_iter().map(|(id,)| id).collect();
 
-    // Step 6：查询每个搭子局的成员头像（最多 5 张）
+    // Step 7：成员头像（最多 5 张）
     let avatar_rows: Vec<(Uuid, String)> = sqlx::query_as(
         "SELECT bgm.gather_id, u.avatar_url
          FROM buddy_gather_members bgm
@@ -169,7 +191,7 @@ pub async fn list(
         }
     }
 
-    // Step 7：组装结果
+    // Step 8：组装结果
     let result = gathers
         .into_iter()
         .map(|g| {
@@ -177,6 +199,8 @@ pub async fn list(
                 .get(&g.creator_id)
                 .cloned()
                 .unwrap_or_else(|| ("未知用户".to_string(), None));
+            let first_menu_name  = g.first_menu_id.and_then(|id| menu_name_map.get(&id).cloned());
+            let second_menu_name = g.second_menu_id.and_then(|id| menu_name_map.get(&id).cloned());
             BuddyGatherWithStats {
                 id:               g.id,
                 creator_id:       g.creator_id,
@@ -186,8 +210,10 @@ pub async fn list(
                 location:         g.location,
                 start_time:       g.start_time,
                 end_time:         g.end_time,
-                category:         g.category,
-                theme:            g.theme,
+                first_menu_id:    g.first_menu_id,
+                first_menu_name,
+                second_menu_id:   g.second_menu_id,
+                second_menu_name,
                 capacity:         g.capacity,
                 description:      g.description,
                 vibes:            g.vibes,
@@ -232,7 +258,26 @@ pub async fn get(
     let (creator_username, creator_avatar) =
         creator.unwrap_or_else(|| ("未知用户".to_string(), None));
 
-    // Step 3：参与人数
+    // Step 3：查询菜单名称
+    let mut menu_ids: Vec<i64> = Vec::new();
+    if let Some(id) = g.first_menu_id  { menu_ids.push(id); }
+    if let Some(id) = g.second_menu_id { menu_ids.push(id); }
+    let menu_name_map: HashMap<i64, String> = if !menu_ids.is_empty() {
+        let rows: Vec<(i64, String)> = sqlx::query_as(
+            "SELECT id, name FROM menus WHERE id = ANY($1)",
+        )
+        .bind(&menu_ids)
+        .fetch_all(pool)
+        .await
+        .map_err(AppError::Database)?;
+        rows.into_iter().collect()
+    } else {
+        HashMap::new()
+    };
+    let first_menu_name  = g.first_menu_id.and_then(|id| menu_name_map.get(&id).cloned());
+    let second_menu_name = g.second_menu_id.and_then(|id| menu_name_map.get(&id).cloned());
+
+    // Step 4：参与人数
     let (joined_count,): (i64,) = sqlx::query_as(
         "SELECT COUNT(*)::BIGINT FROM buddy_gather_members WHERE gather_id = $1",
     )
@@ -241,7 +286,7 @@ pub async fn get(
     .await
     .map_err(AppError::Database)?;
 
-    // Step 4：当前用户是否已参加
+    // Step 5：当前用户是否已参加
     let is_joined: bool = sqlx::query_as::<_, (bool,)>(
         "SELECT EXISTS(SELECT 1 FROM buddy_gather_members WHERE gather_id = $1 AND user_id = $2)",
     )
@@ -252,7 +297,7 @@ pub async fn get(
     .map_err(AppError::Database)?
     .0;
 
-    // Step 5：成员头像（最多 5 张）
+    // Step 6：成员头像（最多 5 张）
     let avatar_rows: Vec<(String,)> = sqlx::query_as(
         "SELECT u.avatar_url
          FROM buddy_gather_members bgm
@@ -276,8 +321,10 @@ pub async fn get(
         location: g.location,
         start_time: g.start_time,
         end_time: g.end_time,
-        category: g.category,
-        theme: g.theme,
+        first_menu_id: g.first_menu_id,
+        first_menu_name,
+        second_menu_id: g.second_menu_id,
+        second_menu_name,
         capacity: g.capacity,
         description: g.description,
         vibes: g.vibes,
@@ -297,7 +344,6 @@ pub async fn join(
     gather_id: Uuid,
     user_id:   Uuid,
 ) -> AppResult<()> {
-    // 检查搭子局是否存在且招募中
     let gather = sqlx::query_as::<_, BuddyGather>(&format!(
         "SELECT {GATHER_COLS} FROM buddy_gathers WHERE id = $1"
     ))
@@ -311,9 +357,8 @@ pub async fn join(
         return Err(AppError::Business("该搭子局已关闭".to_string()));
     }
 
-    // 检查是否已参加
     let already: Option<(i64,)> = sqlx::query_as(
-        "SELECT 1 FROM buddy_gather_members WHERE gather_id = $1 AND user_id = $2"
+        "SELECT 1 FROM buddy_gather_members WHERE gather_id = $1 AND user_id = $2",
     )
     .bind(gather_id)
     .bind(user_id)
@@ -325,7 +370,6 @@ pub async fn join(
         return Err(AppError::Business("你已经参加了该搭子局".to_string()));
     }
 
-    // 检查是否已满
     let (joined_count,): (i64,) =
         sqlx::query_as("SELECT COUNT(*)::BIGINT FROM buddy_gather_members WHERE gather_id = $1")
             .bind(gather_id)
@@ -337,7 +381,6 @@ pub async fn join(
         return Err(AppError::Business("名额已满".to_string()));
     }
 
-    // 插入成员
     sqlx::query("INSERT INTO buddy_gather_members (gather_id, user_id) VALUES ($1, $2)")
         .bind(gather_id)
         .bind(user_id)
@@ -345,7 +388,6 @@ pub async fn join(
         .await
         .map_err(AppError::Database)?;
 
-    // 如果满员则更新状态
     if joined_count + 1 >= gather.capacity as i64 {
         sqlx::query("UPDATE buddy_gathers SET status = 1 WHERE id = $1")
             .bind(gather_id)
@@ -354,9 +396,7 @@ pub async fn join(
             .map_err(AppError::Database)?;
     }
 
-    // 同步群聊成员
     if let Some(group_id) = gather.group_id {
-        // 加入群聊
         sqlx::query(
             "INSERT INTO social_group_members (group_id, user_id)
              VALUES ($1, $2)
@@ -368,21 +408,18 @@ pub async fn join(
         .await
         .map_err(AppError::Database)?;
 
-        // 更新群人数
         sqlx::query("UPDATE social_groups SET member_count = member_count + 1 WHERE id = $1")
             .bind(group_id)
             .execute(pool)
             .await
             .map_err(AppError::Database)?;
 
-        // 查询用户名，发系统消息
-        let username: Option<(String,)> = sqlx::query_as(
-            "SELECT username FROM users WHERE id = $1",
-        )
-        .bind(user_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(AppError::Database)?;
+        let username: Option<(String,)> =
+            sqlx::query_as("SELECT username FROM users WHERE id = $1")
+                .bind(user_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(AppError::Database)?;
 
         let content = format!(
             "{} 加入了搭子局",
@@ -409,7 +446,6 @@ pub async fn leave(
     gather_id: Uuid,
     user_id:   Uuid,
 ) -> AppResult<()> {
-    // 先获取搭子局（需要 group_id 和 status）
     let gather: Option<BuddyGather> = sqlx::query_as::<_, BuddyGather>(&format!(
         "SELECT {GATHER_COLS} FROM buddy_gathers WHERE id = $1"
     ))
@@ -430,20 +466,16 @@ pub async fn leave(
         return Err(AppError::Business("你未参加该搭子局".to_string()));
     }
 
-    // 如果之前是满员状态则恢复招募
     sqlx::query(
-        "UPDATE buddy_gathers SET status = 0
-         WHERE id = $1 AND status = 1",
+        "UPDATE buddy_gathers SET status = 0 WHERE id = $1 AND status = 1",
     )
     .bind(gather_id)
     .execute(pool)
     .await
     .map_err(AppError::Database)?;
 
-    // 同步群聊成员
     if let Some(gather) = gather {
         if let Some(group_id) = gather.group_id {
-            // 退出群聊
             sqlx::query(
                 "DELETE FROM social_group_members WHERE group_id = $1 AND user_id = $2",
             )
@@ -453,7 +485,6 @@ pub async fn leave(
             .await
             .map_err(AppError::Database)?;
 
-            // 更新群人数（不低于 0）
             sqlx::query(
                 "UPDATE social_groups SET member_count = GREATEST(member_count - 1, 0) WHERE id = $1",
             )
@@ -462,14 +493,12 @@ pub async fn leave(
             .await
             .map_err(AppError::Database)?;
 
-            // 查询用户名，发系统消息
-            let username: Option<(String,)> = sqlx::query_as(
-                "SELECT username FROM users WHERE id = $1",
-            )
-            .bind(user_id)
-            .fetch_optional(pool)
-            .await
-            .map_err(AppError::Database)?;
+            let username: Option<(String,)> =
+                sqlx::query_as("SELECT username FROM users WHERE id = $1")
+                    .bind(user_id)
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(AppError::Database)?;
 
             let content = format!(
                 "{} 退出了搭子局",

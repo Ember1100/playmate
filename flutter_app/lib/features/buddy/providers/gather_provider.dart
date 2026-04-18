@@ -2,18 +2,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/gather_model.dart';
 import '../data/gather_repository.dart';
 
-// ── 按分类的搭子局列表 Provider ───────────────────────────────────────────────
+// ── 按一级菜单 ID 的搭子局列表 Provider ──────────────────────────────────────
 
-class GatherListNotifier extends FamilyAsyncNotifier<List<Gather>, String?> {
+class GatherListNotifier extends FamilyAsyncNotifier<List<Gather>, int?> {
   @override
-  Future<List<Gather>> build(String? category) async {
-    return ref.read(gatherRepositoryProvider).listGathers(category: category);
+  Future<List<Gather>> build(int? firstMenuId) async {
+    return ref.read(gatherRepositoryProvider).listGathers(firstMenuId: firstMenuId);
   }
 
   Future<void> refresh() async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(
-      () => ref.read(gatherRepositoryProvider).listGathers(category: arg),
+      () => ref.read(gatherRepositoryProvider).listGathers(firstMenuId: arg),
     );
   }
 
@@ -24,7 +24,6 @@ class GatherListNotifier extends FamilyAsyncNotifier<List<Gather>, String?> {
     if (index == -1) return;
 
     final original = current[index];
-    // Optimistic update
     final updated = List<Gather>.from(current);
     updated[index] = original.copyWith(
       isJoined: true,
@@ -41,7 +40,6 @@ class GatherListNotifier extends FamilyAsyncNotifier<List<Gather>, String?> {
         state = AsyncData(reverted);
       }
     } catch (e) {
-      // Revert
       final reverted = List<Gather>.from(state.valueOrNull ?? []);
       final i = reverted.indexWhere((g) => g.id == gatherId);
       if (i != -1) {
@@ -93,6 +91,6 @@ class GatherListNotifier extends FamilyAsyncNotifier<List<Gather>, String?> {
 }
 
 final gatherListProvider =
-    AsyncNotifierProviderFamily<GatherListNotifier, List<Gather>, String?>(
+    AsyncNotifierProviderFamily<GatherListNotifier, List<Gather>, int?>(
   GatherListNotifier.new,
 );

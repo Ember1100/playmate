@@ -5,6 +5,7 @@ import '../../../../shared/widgets/pm_image.dart';
 import '../../data/gather_model.dart';
 import '../../data/gather_repository.dart';
 import '../../providers/gather_provider.dart';
+import '../../providers/menu_provider.dart';
 
 /// 搭子 Tab 首页
 class BuddyScreen extends ConsumerStatefulWidget {
@@ -15,17 +16,8 @@ class BuddyScreen extends ConsumerStatefulWidget {
 }
 
 class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingObserver {
-  // 搭子局 分类
-  static const _categories = ['生活', '学习', '兴趣', '游戏', '自定义'];
-  int _catIndex = 0;
-
-  static const _subTags = {
-    '生活': ['饭搭子', '探店搭子', '遛宠搭子', '观影搭子', '健身搭子', '更多...'],
-    '学习': ['考研搭子', '刷题搭子', '图书馆搭子', '语言搭子', '更多...'],
-    '兴趣': ['摄影搭子', '手工搭子', '读书搭子', '音乐搭子', '更多...'],
-    '游戏': ['手游搭子', '桌游搭子', '剧本杀搭子', 'Steam搭子', '更多...'],
-    '自定义': ['我发起的', '我参与的'],
-  };
+  // 一级菜单 ID（null = 全部）
+  int? _selectedFirstMenuId;
   int _subTagIndex = -1;
   final int _topTab = 0;
 
@@ -480,6 +472,10 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
   // ── 一级分类 Tab（搭子局 Tab 下才显示）────────────────────────────────────
   Widget _buildCategoryTabs() {
     if (_topTab != 0) return const SizedBox.shrink();
+    final menusAsync = ref.watch(menusProvider);
+    final menus = menusAsync.valueOrNull ?? [];
+    // 构建 tab 列表：「全部」+ 各一级菜单
+    final tabs = <(int?, String)>[(null, '全部'), ...menus.map((m) => (m.id, m.name))];
     return Container(
       height: 44,
       color: Colors.white,
@@ -487,10 +483,10 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
-          children: List.generate(_categories.length, (i) {
-            final selected = i == _catIndex;
+          children: tabs.map((tab) {
+            final selected = tab.$1 == _selectedFirstMenuId;
             return GestureDetector(
-              onTap: () => setState(() { _catIndex = i; _subTagIndex = -1; }),
+              onTap: () => setState(() { _selectedFirstMenuId = tab.$1; _subTagIndex = -1; }),
               child: Container(
                 margin: const EdgeInsets.only(right: 4),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -499,7 +495,7 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  _categories[i],
+                  tab.$2,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
@@ -508,7 +504,7 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
                 ),
               ),
             );
-          }),
+          }).toList(),
         ),
       ),
     );
@@ -517,7 +513,13 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
   // ── 二级子标签行（点击 → 显示搭子人物）────────────────────────────────────
   Widget _buildSubTagRow() {
     if (_topTab != 0) return const SizedBox.shrink();
-    final subTags = _subTags[_categories[_catIndex]] ?? [];
+    // 从菜单 provider 取当前一级菜单的二级子项
+    final menus = ref.watch(menusProvider).valueOrNull ?? [];
+    final selectedMenu = _selectedFirstMenuId == null
+        ? null
+        : menus.where((m) => m.id == _selectedFirstMenuId).firstOrNull;
+    final subItems = selectedMenu?.children ?? [];
+    if (subItems.isEmpty) return const SizedBox.shrink();
     return Container(
       height: 40,
       color: const Color(0xFFFFF9EF),
@@ -525,11 +527,10 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
-          children: List.generate(subTags.length, (i) {
+          children: List.generate(subItems.length, (i) {
             final selected = i == _subTagIndex;
-            final isMore = subTags[i] == '更多...';
             return GestureDetector(
-              onTap: isMore ? null : () => setState(() { _subTagIndex = selected ? -1 : i; }),
+              onTap: () => setState(() { _subTagIndex = selected ? -1 : i; }),
               child: Container(
                 margin: const EdgeInsets.only(right: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -539,7 +540,7 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
                   border: Border.all(color: selected ? const Color(0xFFFF7A00) : const Color(0xFFEEEEEE)),
                 ),
                 child: Text(
-                  subTags[i],
+                  '${subItems[i].name}搭子',
                   style: TextStyle(
                     fontSize: 12,
                     color: selected ? const Color(0xFFFF7A00) : const Color(0xFF666666),
@@ -556,10 +557,7 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
 
   // ── 搭子局卡片列表（Sliver）───────────────────────────────────────────────
   Widget _buildGatherListSliver() {
-    final cat = _categories[_catIndex];
-    // "自定义" 暂不走远程，后续扩展
-    final providerCat = cat == '自定义' ? null : cat;
-    final asyncGathers = ref.watch(gatherListProvider(providerCat));
+    final asyncGathers = ref.watch(gatherListProvider(_selectedFirstMenuId));
 
     return asyncGathers.when(
       loading: () => const SliverToBoxAdapter(
@@ -576,7 +574,7 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
             const SizedBox(height: 8),
             const Text('加载失败，下拉刷新重试', style: TextStyle(color: Color(0xFF999999))),
             TextButton(
-              onPressed: () => ref.read(gatherListProvider(providerCat).notifier).refresh(),
+              onPressed: () => ref.read(gatherListProvider(_selectedFirstMenuId).notifier).refresh(),
               child: const Text('重试', style: TextStyle(color: Color(0xFFFF7A00))),
             ),
           ]),
@@ -601,7 +599,7 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
               padding: EdgeInsets.fromLTRB(12, i == 0 ? 10 : 0, 12, 12),
               child: _GatherCard(
                 item: items[i],
-                onTap: () => _showGatherDetail(context, items[i], providerCat),
+                onTap: () => _showGatherDetail(context, items[i], _selectedFirstMenuId),
               ),
             ),
             childCount: items.length,
@@ -611,18 +609,24 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
     );
   }
 
-  void _showGatherDetail(BuildContext context, Gather item, String? category) {
+  void _showGatherDetail(BuildContext context, Gather item, int? firstMenuId) {
     showModalBottomSheet(
       context: context, isScrollControlled: true, useRootNavigator: true,
       backgroundColor: Colors.transparent, enableDrag: false,
-      builder: (_) => _GatherDetailSheet(item: item, category: category),
+      builder: (_) => _GatherDetailSheet(item: item, firstMenuId: firstMenuId),
     );
   }
 
   // ── 子标签 → 搭子人物网格（Sliver）────────────────────────────────────────
   SliverToBoxAdapter _buildSubTagBuddyGridSliver() {
-    final subTags = _subTags[_categories[_catIndex]] ?? [];
-    final tag = (_subTagIndex >= 0 && _subTagIndex < subTags.length) ? subTags[_subTagIndex] : '';
+    final menus = ref.watch(menusProvider).valueOrNull ?? [];
+    final selectedMenu = _selectedFirstMenuId == null
+        ? null
+        : menus.where((m) => m.id == _selectedFirstMenuId).firstOrNull;
+    final subItems = selectedMenu?.children ?? [];
+    final tag = (_subTagIndex >= 0 && _subTagIndex < subItems.length)
+        ? '${subItems[_subTagIndex].name}搭子'
+        : '';
     final people = _mockBuddyPeople(tag);
     return SliverToBoxAdapter(
       child: Padding(
@@ -661,15 +665,13 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
   }
 
   void _showPublishDialog() {
-    final cat = _categories[_catIndex];
-    final providerCat = cat == '自定义' ? null : cat;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       useRootNavigator: true,
       enableDrag: false,
       backgroundColor: Colors.transparent,
-      builder: (_) => _PublishGatherSheet(defaultCategory: providerCat),
+      builder: (_) => _PublishGatherSheet(defaultFirstMenuId: _selectedFirstMenuId),
     );
   }
 
@@ -882,7 +884,7 @@ class _GatherCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: color.withAlpha(80), width: 0.8),
               ),
-              child: Text(item.theme,
+              child: Text(item.buddyTag,
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: color)),
             ),
           ]),
@@ -1107,9 +1109,9 @@ class _OrigFeedCard extends StatelessWidget {
 // ═════════════════════════════════════════════════════════════════════════════
 
 class _GatherDetailSheet extends ConsumerWidget {
-  const _GatherDetailSheet({required this.item, required this.category});
+  const _GatherDetailSheet({required this.item, required this.firstMenuId});
   final Gather item;
-  final String? category;
+  final int? firstMenuId;
 
   String _fmt(DateTime dt) {
     return '${dt.year}年${dt.month.toString().padLeft(2, '0')}月'
@@ -1124,7 +1126,7 @@ class _GatherDetailSheet extends ConsumerWidget {
     final topPad = MediaQuery.of(context).padding.top;
     final color = item.themeColor;
     // 从 provider 取最新状态（参加/退出后乐观更新）
-    final gathers = ref.watch(gatherListProvider(category)).valueOrNull;
+    final gathers = ref.watch(gatherListProvider(firstMenuId)).valueOrNull;
     final current = gathers?.firstWhere((g) => g.id == item.id, orElse: () => item) ?? item;
     return Container(
       height: MediaQuery.of(context).size.height,
@@ -1152,7 +1154,7 @@ class _GatherDetailSheet extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(12)),
-                  child: Text(current.theme, style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
+                  child: Text(current.buddyTag, style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
                 ),
               ]),
               const SizedBox(height: 14),
@@ -1241,9 +1243,9 @@ class _GatherDetailSheet extends ConsumerWidget {
                     onPressed: current.isFull && !current.isJoined ? null : () async {
                       try {
                         if (current.isJoined) {
-                          await ref.read(gatherListProvider(category).notifier).leave(current.id);
+                          await ref.read(gatherListProvider(firstMenuId).notifier).leave(current.id);
                         } else {
-                          await ref.read(gatherListProvider(category).notifier).join(current.id);
+                          await ref.read(gatherListProvider(firstMenuId).notifier).join(current.id);
                         }
                       } catch (e) {
                         if (context.mounted) {
@@ -1307,8 +1309,8 @@ class _DetailRow extends StatelessWidget {
 // ═════════════════════════════════════════════════════════════════════════════
 
 class _PublishGatherSheet extends ConsumerStatefulWidget {
-  const _PublishGatherSheet({this.defaultCategory});
-  final String? defaultCategory;
+  const _PublishGatherSheet({this.defaultFirstMenuId});
+  final int? defaultFirstMenuId;
 
   @override
   ConsumerState<_PublishGatherSheet> createState() => _PublishGatherSheetState();
@@ -1319,7 +1321,8 @@ class _PublishGatherSheetState extends ConsumerState<_PublishGatherSheet> {
   final _descCtrl = TextEditingController();
   final _customPeopleCtrl = TextEditingController();
 
-  int? _categoryIndex;
+  int? _firstMenuId;
+  int? _secondMenuId;
   DateTime? _startTime;
   DateTime? _endTime;
   // 2/3/4 → 固定；-1 → 自定义（读 _customPeopleCtrl）
@@ -1329,14 +1332,13 @@ class _PublishGatherSheetState extends ConsumerState<_PublishGatherSheet> {
   final Set<int> _vibeSet = {};
   bool _submitting = false;
 
-  static const _categories = [
-    ('🍜', '吃货'),
-    ('👀', '看看'),
-    ('⚽', '运动'),
-    ('🎮', '游戏'),
-    ('✨', '其他'),
-  ];
   static const _vibes = ['轻松', '认真', '新手友好'];
+
+  @override
+  void initState() {
+    super.initState();
+    _firstMenuId = widget.defaultFirstMenuId;
+  }
 
   @override
   void dispose() {
@@ -1352,8 +1354,8 @@ class _PublishGatherSheetState extends ConsumerState<_PublishGatherSheet> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请填写活动名称')));
       return;
     }
-    if (_categoryIndex == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请选择活动类型')));
+    if (_firstMenuId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请选择活动分类')));
       return;
     }
     if (_startTime == null || _endTime == null) {
@@ -1365,10 +1367,6 @@ class _PublishGatherSheetState extends ConsumerState<_PublishGatherSheet> {
       return;
     }
 
-    final cat = _categories[_categoryIndex!];
-    final theme = cat.$2;
-    // 优先使用用户所在的 Tab 分类，fallback 才从 theme 推导
-    final mainCategory = widget.defaultCategory ?? themeToCategory(theme);
     final capacity = _customPeopleMode
         ? (int.tryParse(_customPeopleCtrl.text) ?? 8)
         : (_peopleCount ?? 8);
@@ -1377,19 +1375,19 @@ class _PublishGatherSheetState extends ConsumerState<_PublishGatherSheet> {
     try {
       final gather = await ref.read(gatherRepositoryProvider).createGather(
         CreateGatherRequest(
-          title:       title,
-          location:    _location,
-          startTime:   _startTime!,
-          endTime:     _endTime!,
-          category:    mainCategory,
-          theme:       theme,
-          capacity:    capacity,
-          description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
-          vibes:       _vibeSet.map((i) => _vibes[i]).toList(),
+          title:          title,
+          location:       _location,
+          startTime:      _startTime!,
+          endTime:        _endTime!,
+          firstMenuId:    _firstMenuId,
+          secondMenuId:   _secondMenuId,
+          capacity:       capacity,
+          description:    _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+          vibes:          _vibeSet.map((i) => _vibes[i]).toList(),
         ),
       );
-      // 插入到当前 Tab 列表头部（mainCategory 即 defaultCategory）
-      ref.read(gatherListProvider(mainCategory).notifier).prepend(gather);
+      // 插入到对应一级菜单的列表头部
+      ref.read(gatherListProvider(_firstMenuId).notifier).prepend(gather);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
@@ -1642,40 +1640,87 @@ class _PublishGatherSheetState extends ConsumerState<_PublishGatherSheet> {
     );
   }
 
-  // ── 类型 ─────────────────────────────────────────────────────────────────
+  // ── 分类（一级 + 二级菜单选择）────────────────────────────────────────────
 
   Widget _buildCategoryRow() {
+    final menusAsync = ref.watch(menusProvider);
+    final menus = menusAsync.valueOrNull ?? [];
+    final selectedMenu = _firstMenuId == null ? null : menus.where((m) => m.id == _firstMenuId).firstOrNull;
+    final subItems = selectedMenu?.children ?? [];
+
     return _Section(
       iconBg: const Color(0xFFE8F5E9),
       icon: '🎨',
-      label: '类型',
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: List.generate(_categories.length, (i) {
-            final selected = i == _categoryIndex;
-            return GestureDetector(
-              onTap: () => setState(() => _categoryIndex = i),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: selected ? const Color(0xFFFF7A00) : const Color(0xFFF5F5F5),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '${_categories[i].$1} ${_categories[i].$2}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: selected ? Colors.white : const Color(0xFF555555),
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                  ),
-                ),
+      label: '分类',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 一级菜单
+          if (menusAsync.isLoading)
+            const SizedBox(height: 32, child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF7A00))))
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: menus.map((m) {
+                  final selected = m.id == _firstMenuId;
+                  return GestureDetector(
+                    onTap: () => setState(() { _firstMenuId = m.id; _secondMenuId = null; }),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: selected ? const Color(0xFFFF7A00) : const Color(0xFFF5F5F5),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        m.name,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: selected ? Colors.white : const Color(0xFF555555),
+                          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
-            );
-          }),
-        ),
+            ),
+          // 二级菜单（仅一级已选时显示）
+          if (subItems.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: subItems.map((sub) {
+                  final selected = sub.id == _secondMenuId;
+                  return GestureDetector(
+                    onTap: () => setState(() => _secondMenuId = selected ? null : sub.id),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: selected ? const Color(0xFFFFEDD0) : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: selected ? const Color(0xFFFF7A00) : const Color(0xFFEEEEEE)),
+                      ),
+                      child: Text(
+                        sub.name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: selected ? const Color(0xFFFF7A00) : const Color(0xFF666666),
+                          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

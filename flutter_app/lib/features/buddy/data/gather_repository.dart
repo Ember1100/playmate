@@ -8,13 +8,13 @@ class GatherRepository {
   final ApiClient _client;
 
   /// 搭子局列表
-  Future<List<Gather>> listGathers({String? category, int page = 1, int limit = 20}) async {
+  Future<List<Gather>> listGathers({int? firstMenuId, int page = 1, int limit = 20}) async {
     final resp = await _client.get<Map<String, dynamic>>(
       '/buddy/gathers',
       params: {
         'page': page,
         'limit': limit,
-        if (category != null) 'category': category,
+        if (firstMenuId != null) 'first_menu_id': firstMenuId,
       },
     );
     final pageData = resp['data'] as Map<String, dynamic>? ?? {};

@@ -10,8 +10,10 @@ class Gather {
     this.location,
     required this.startTime,
     required this.endTime,
-    required this.category,
-    required this.theme,
+    this.firstMenuId,
+    this.firstMenuName,
+    this.secondMenuId,
+    this.secondMenuName,
     required this.capacity,
     this.description,
     required this.vibes,
@@ -31,8 +33,10 @@ class Gather {
   final String? location;
   final DateTime startTime;
   final DateTime endTime;
-  final String category;
-  final String theme;
+  final int? firstMenuId;
+  final String? firstMenuName;
+  final int? secondMenuId;
+  final String? secondMenuName;
   final int capacity;
   final String? description;
   final List<String> vibes;
@@ -45,13 +49,16 @@ class Gather {
 
   bool get isFull => joinedCount >= capacity;
 
-  /// 根据 theme 返回对应主题色
+  /// 搭子标签名：「{二级菜单名}搭子」
+  String get buddyTag => secondMenuName != null ? '${secondMenuName}搭子' : '搭子';
+
+  /// 根据一级菜单名返回对应主题色
   Color get themeColor {
-    switch (theme) {
-      case '吃货': return const Color(0xFFFF7A00);
-      case '看看': return const Color(0xFF9C27B0);
-      case '运动': return const Color(0xFF5DCAA5);
-      case '游戏': return const Color(0xFF2196F3);
+    switch (firstMenuName) {
+      case '生活': return const Color(0xFFFF7A00);
+      case '学习': return const Color(0xFF5DCAA5);
+      case '兴趣': return const Color(0xFF2196F3);
+      case '游戏': return const Color(0xFF9C27B0);
       default:    return const Color(0xFF888888);
     }
   }
@@ -66,8 +73,10 @@ class Gather {
       location:         json['location'] as String?,
       startTime:        DateTime.parse(json['start_time'] as String).toLocal(),
       endTime:          DateTime.parse(json['end_time'] as String).toLocal(),
-      category:         json['category'] as String,
-      theme:            json['theme'] as String,
+      firstMenuId:      json['first_menu_id'] as int?,
+      firstMenuName:    json['first_menu_name'] as String?,
+      secondMenuId:     json['second_menu_id'] as int?,
+      secondMenuName:   json['second_menu_name'] as String?,
       capacity:         json['capacity'] as int,
       description:      json['description'] as String?,
       vibes:            (json['vibes'] as List<dynamic>? ?? []).cast<String>(),
@@ -90,8 +99,10 @@ class Gather {
       location:        location,
       startTime:       startTime,
       endTime:         endTime,
-      category:        category,
-      theme:           theme,
+      firstMenuId:     firstMenuId,
+      firstMenuName:   firstMenuName,
+      secondMenuId:    secondMenuId,
+      secondMenuName:  secondMenuName,
       capacity:        capacity,
       description:     description,
       vibes:           vibes,
@@ -111,8 +122,8 @@ class CreateGatherRequest {
     this.location,
     required this.startTime,
     required this.endTime,
-    required this.category,
-    required this.theme,
+    this.firstMenuId,
+    this.secondMenuId,
     required this.capacity,
     this.description,
     required this.vibes,
@@ -122,32 +133,21 @@ class CreateGatherRequest {
   final String? location;
   final DateTime startTime;
   final DateTime endTime;
-  final String category;
-  final String theme;
+  final int? firstMenuId;
+  final int? secondMenuId;
   final int capacity;
   final String? description;
   final List<String> vibes;
 
   Map<String, dynamic> toJson() => {
-    'title':       title,
-    'location':    location,
-    'start_time':  startTime.toUtc().toIso8601String(),
-    'end_time':    endTime.toUtc().toIso8601String(),
-    'category':    category,
-    'theme':       theme,
-    'capacity':    capacity,
-    'description': description,
-    'vibes':       vibes,
+    'title':          title,
+    'location':       location,
+    'start_time':     startTime.toUtc().toIso8601String(),
+    'end_time':       endTime.toUtc().toIso8601String(),
+    'first_menu_id':  firstMenuId,
+    'second_menu_id': secondMenuId,
+    'capacity':       capacity,
+    'description':    description,
+    'vibes':          vibes,
   };
-}
-
-/// 发布表单选项 → 后端分类映射
-String themeToCategory(String theme) {
-  switch (theme) {
-    case '吃货': return '生活';
-    case '看看': return '生活';
-    case '运动': return '兴趣';
-    case '游戏': return '游戏';
-    default:    return '生活';
-  }
 }

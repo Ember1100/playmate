@@ -46,8 +46,8 @@ pub async fn create_gather(
         payload.location.as_deref(),
         payload.start_time,
         payload.end_time,
-        &payload.category,
-        &payload.theme,
+        payload.first_menu_id,
+        payload.second_menu_id,
         payload.capacity,
         payload.description.as_deref(),
         &payload.vibes,
@@ -72,7 +72,7 @@ pub async fn list_gathers(
     let items  = gather_repo::list(
         &state.db,
         current_user.id,
-        q.category.as_deref(),
+        q.first_menu_id,
         limit,
         offset,
     )
