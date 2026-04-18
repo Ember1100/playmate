@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
 };
 
-use playmate_common::{error::AppError, middleware::auth::CurrentUser, response::ApiResponse, AppState};
+use playmate_common::{error::AppError, response::ApiResponse, AppState, CurrentUser};
 
 use crate::{
     dto::{BuddySearchResponse, GatherResponse, SearchQuery},
