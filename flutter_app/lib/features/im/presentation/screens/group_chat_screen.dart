@@ -30,6 +30,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   final _textController  = TextEditingController();
   final _scrollController = ScrollController();
   StreamSubscription<Map<String, dynamic>>? _wsSub;
+  bool _initialScrolled = false;
 
   static const _colorPool = [
     Color(0xFF7F77DD), Color(0xFF4ECDC4), Color(0xFFFF6B6B),
@@ -105,15 +106,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     super.dispose();
   }
 
-  // reverse:true 时 position 0 即底部（最新消息）
-  void _scrollToBottom() {
+  void _scrollToBottom({bool animate = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
+      if (!_scrollController.hasClients) return;
+      final max = _scrollController.position.maxScrollExtent;
+      if (animate) {
+        _scrollController.animateTo(max,
+            duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      } else {
+        _scrollController.jumpTo(max);
       }
     });
   }
@@ -207,18 +208,20 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                         style: TextStyle(color: AppColors.textSecondary)),
                   );
                 }
-                // reverse:true → index 0（最新消息）在底部，列表天然停在最新消息
-                // i+1 是视觉上方的消息（更旧），用于决定是否显示时间戳
+                // 首次加载无动画跳底部：消息少时 maxScrollExtent=0 停在顶部，消息多时跳最新
+                if (!_initialScrolled) {
+                  _initialScrolled = true;
+                  _scrollToBottom(animate: false);
+                }
                 return ListView.builder(
                   controller: _scrollController,
-                  reverse: true,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                   itemCount: msgs.length,
                   itemBuilder: (_, i) {
                     final msg  = msgs[i];
-                    final older = i + 1 < msgs.length ? msgs[i + 1] : null;
-                    final showTime = older == null ||
-                        msg.createdAt.difference(older.createdAt).abs().inMinutes > 5;
+                    final prev = i > 0 ? msgs[i - 1] : null;
+                    final showTime = prev == null ||
+                        msg.createdAt.difference(prev.createdAt).abs().inMinutes > 5;
                     final isMe = msg.senderId != null && msg.senderId == currentUser?.id;
                     return _GroupMsgItem(
                       msg: msg,

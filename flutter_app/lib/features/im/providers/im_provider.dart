@@ -118,8 +118,7 @@ class GroupChatNotifier extends FamilyAsyncNotifier<List<GroupMessage>, String> 
   void addMessage(GroupMessage msg) {
     state.whenData((list) {
       if (list.any((m) => m.id == msg.id)) return;
-      // 最新消息在最前（配合 ListView reverse:true）
-      state = AsyncData([msg, ...list]);
+      state = AsyncData([...list, msg]);
     });
   }
 }
@@ -158,8 +157,7 @@ class ChatNotifier extends FamilyAsyncNotifier<List<Message>, String> {
       createdAt: DateTime.now(),
       isRecalled: false,
     );
-    // 最新消息在最前（配合 ListView reverse:true）
-    state = AsyncData([tempMessage, ...current]);
+    state = AsyncData([...current, tempMessage]);
 
     try {
       final sent = await ref.read(imRepositoryProvider).sendMessage(
@@ -184,8 +182,7 @@ class ChatNotifier extends FamilyAsyncNotifier<List<Message>, String> {
     final current = state.valueOrNull ?? [];
     // Avoid duplicates
     if (current.any((m) => m.id == message.id)) return;
-    // 最新消息在最前（配合 ListView reverse:true）
-    state = AsyncData([message, ...current]);
+    state = AsyncData([...current, message]);
   }
 }
 

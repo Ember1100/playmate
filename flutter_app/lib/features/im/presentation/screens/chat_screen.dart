@@ -35,6 +35,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _scrollController = ScrollController();
   StreamSubscription<Map<String, dynamic>>? _wsSub;
   bool _uploadingImage = false;
+  bool _initialScrolled = false; // 首次加载后只跳一次底部
 
   @override
   void initState() {
@@ -95,15 +96,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
-  // reverse:true 时 position 0 即底部（最新消息）
-  void _scrollToBottom() {
+  void _scrollToBottom({bool animate = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
+      if (!_scrollController.hasClients) return;
+      final max = _scrollController.position.maxScrollExtent;
+      if (animate) {
+        _scrollController.animateTo(max,
+            duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      } else {
+        _scrollController.jumpTo(max);
       }
     });
   }
@@ -274,11 +275,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         style: TextStyle(color: AppColors.textSecondary)),
                   );
                 }
-                // reverse:true → index 0 在底部，配合后端 DESC 返回
-                // 不需要 _scrollToBottom，列表天然停在最新消息
+                // 首次加载：无动画跳到底部（消息少时 maxScrollExtent=0，停在顶部；消息多时跳最新）
+                if (!_initialScrolled) {
+                  _initialScrolled = true;
+                  _scrollToBottom(animate: false);
+                }
                 return ListView.builder(
                   controller: _scrollController,
-                  reverse: true,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 16),
                   itemCount: messages.length,
