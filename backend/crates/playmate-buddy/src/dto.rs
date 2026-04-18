@@ -106,6 +106,35 @@ fn default_menu_type() -> i16 { 1 }
 fn default_page() -> i64 { 1 }
 fn default_limit() -> i64 { 20 }
 
+// ── 搜索 Request / Response ───────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    pub q:     String,
+    #[serde(default = "default_page")]
+    pub page:  i64,
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+}
+
+#[derive(Serialize)]
+pub struct SearchUserResponse {
+    pub id:         String,
+    pub username:   String,
+    pub avatar_url: Option<String>,
+    pub bio:        Option<String>,
+    pub tags:       Vec<String>,
+    pub city:       Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct BuddySearchResponse {
+    pub users:        Vec<SearchUserResponse>,
+    pub user_total:   i64,
+    pub gathers:      Vec<GatherResponse>,
+    pub gather_total: i64,
+}
+
 // ── 菜单 Response ─────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]

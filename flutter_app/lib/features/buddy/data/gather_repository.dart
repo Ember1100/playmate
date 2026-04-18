@@ -53,6 +53,15 @@ class GatherRepository {
   Future<void> cancelGather(String gatherId) async {
     await _client.post<dynamic>('/buddy/gathers/$gatherId/cancel');
   }
+
+  /// 搜索搭子（用户 + 搭子局）
+  Future<BuddySearchResult> search(String keyword, {int page = 1, int limit = 10}) async {
+    final resp = await _client.get<Map<String, dynamic>>(
+      '/buddy/search',
+      params: {'q': keyword, 'page': page, 'limit': limit},
+    );
+    return BuddySearchResult.fromJson(resp['data'] as Map<String, dynamic>? ?? {});
+  }
 }
 
 final gatherRepositoryProvider = Provider<GatherRepository>((ref) {

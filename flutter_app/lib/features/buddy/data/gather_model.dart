@@ -120,6 +120,62 @@ class Gather {
   }
 }
 
+// ── 搜索结果模型 ──────────────────────────────────────────────────────────────
+
+class SearchUser {
+  const SearchUser({
+    required this.id,
+    required this.username,
+    this.avatarUrl,
+    this.bio,
+    required this.tags,
+    this.city,
+  });
+
+  final String id;
+  final String username;
+  final String? avatarUrl;
+  final String? bio;
+  final List<String> tags;
+  final String? city;
+
+  factory SearchUser.fromJson(Map<String, dynamic> json) => SearchUser(
+        id:        json['id'] as String,
+        username:  json['username'] as String? ?? '',
+        avatarUrl: json['avatar_url'] as String?,
+        bio:       json['bio'] as String?,
+        tags:      (json['tags'] as List<dynamic>? ?? []).cast<String>(),
+        city:      json['city'] as String?,
+      );
+}
+
+class BuddySearchResult {
+  const BuddySearchResult({
+    required this.users,
+    required this.userTotal,
+    required this.gathers,
+    required this.gatherTotal,
+  });
+
+  final List<SearchUser> users;
+  final int userTotal;
+  final List<Gather> gathers;
+  final int gatherTotal;
+
+  bool get isEmpty => users.isEmpty && gathers.isEmpty;
+
+  factory BuddySearchResult.fromJson(Map<String, dynamic> json) => BuddySearchResult(
+        users: (json['users'] as List<dynamic>? ?? [])
+            .map((e) => SearchUser.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        userTotal:    json['user_total'] as int? ?? 0,
+        gathers: (json['gathers'] as List<dynamic>? ?? [])
+            .map((e) => Gather.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        gatherTotal: json['gather_total'] as int? ?? 0,
+      );
+}
+
 class CreateGatherRequest {
   const CreateGatherRequest({
     required this.title,

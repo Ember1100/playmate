@@ -235,6 +235,158 @@ pub async fn list(
     Ok(result)
 }
 
+// ── 搜索搭子局（关键词匹配标题/描述） ────────────────────────────────────────
+
+pub async fn search(
+    pool:            &PgPool,
+    current_user_id: Uuid,
+    keyword:         &str,
+    limit:           i64,
+    offset:          i64,
+) -> AppResult<(Vec<BuddyGatherWithStats>, i64)> {
+    let pattern = format!("%{}%", keyword);
+
+    // Step 1: 匹配关键词的搭子局
+    let gathers: Vec<BuddyGather> = sqlx::query_as::<_, BuddyGather>(&format!(
+        "SELECT {GATHER_COLS} FROM buddy_gathers
+         WHERE status = 0 AND (title ILIKE $1 OR description ILIKE $1)
+         ORDER BY created_at DESC LIMIT $2 OFFSET $3"
+    ))
+    .bind(&pattern)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    // Step 2: 总数
+    let (total,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*)::BIGINT FROM buddy_gathers
+         WHERE status = 0 AND (title ILIKE $1 OR description ILIKE $1)",
+    )
+    .bind(&pattern)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    if gathers.is_empty() {
+        return Ok((vec![], total));
+    }
+
+    let gather_ids:  Vec<Uuid> = gathers.iter().map(|g| g.id).collect();
+    let creator_ids: Vec<Uuid> = gathers.iter().map(|g| g.creator_id).collect();
+
+    let mut menu_ids: Vec<i64> = Vec::new();
+    for g in &gathers {
+        if let Some(id) = g.first_menu_id  { menu_ids.push(id); }
+        if let Some(id) = g.second_menu_id { menu_ids.push(id); }
+    }
+    menu_ids.dedup();
+
+    // Step 3: 创建者信息
+    let creators: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
+        "SELECT id, username, avatar_url FROM users WHERE id = ANY($1)",
+    )
+    .bind(&creator_ids)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::Database)?;
+    let creator_map: HashMap<Uuid, (String, Option<String>)> = creators
+        .into_iter()
+        .map(|(id, username, avatar)| (id, (username, avatar)))
+        .collect();
+
+    // Step 4: 菜单名称
+    let menu_name_map: HashMap<i64, String> = if !menu_ids.is_empty() {
+        let rows: Vec<(i64, String)> = sqlx::query_as(
+            "SELECT id, name FROM menus WHERE id = ANY($1)",
+        )
+        .bind(&menu_ids)
+        .fetch_all(pool)
+        .await
+        .map_err(AppError::Database)?;
+        rows.into_iter().collect()
+    } else {
+        HashMap::new()
+    };
+
+    // Step 5: 参与人数
+    let counts: Vec<(Uuid, i64)> = sqlx::query_as(
+        "SELECT gather_id, COUNT(*)::BIGINT
+         FROM buddy_gather_members
+         WHERE gather_id = ANY($1)
+         GROUP BY gather_id",
+    )
+    .bind(&gather_ids)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::Database)?;
+    let count_map: HashMap<Uuid, i64> = counts.into_iter().collect();
+
+    // Step 6: 当前用户已参加哪些
+    let joined: Vec<(Uuid,)> = sqlx::query_as(
+        "SELECT gather_id FROM buddy_gather_members
+         WHERE gather_id = ANY($1) AND user_id = $2",
+    )
+    .bind(&gather_ids)
+    .bind(current_user_id)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::Database)?;
+    let joined_set: HashSet<Uuid> = joined.into_iter().map(|(id,)| id).collect();
+
+    // Step 7: 成员信息（最多 5 人）
+    let member_rows: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
+        "SELECT bgm.gather_id, u.username, u.avatar_url
+         FROM buddy_gather_members bgm
+         JOIN users u ON u.id = bgm.user_id
+         WHERE bgm.gather_id = ANY($1)
+         ORDER BY bgm.joined_at",
+    )
+    .bind(&gather_ids)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::Database)?;
+    let mut members_map: HashMap<Uuid, Vec<(String, Option<String>)>> = HashMap::new();
+    for (gather_id, username, avatar) in member_rows {
+        let v = members_map.entry(gather_id).or_default();
+        if v.len() < 5 { v.push((username, avatar)); }
+    }
+
+    // Step 8: 组装
+    let result = gathers
+        .into_iter()
+        .map(|g| {
+            let (creator_username, creator_avatar) = creator_map
+                .get(&g.creator_id)
+                .cloned()
+                .unwrap_or_else(|| ("未知用户".to_string(), None));
+            let first_menu_name  = g.first_menu_id.and_then(|id| menu_name_map.get(&id).cloned());
+            let second_menu_name = g.second_menu_id.and_then(|id| menu_name_map.get(&id).cloned());
+            let members = members_map.remove(&g.id).unwrap_or_default();
+            let member_avatars   = members.iter().map(|(_, av)| av.clone().unwrap_or_default()).collect();
+            let member_usernames = members.into_iter().map(|(un, _)| un).collect();
+            BuddyGatherWithStats {
+                id: g.id, creator_id: g.creator_id,
+                creator_username, creator_avatar,
+                title: g.title, location: g.location,
+                start_time: g.start_time, end_time: g.end_time,
+                first_menu_id: g.first_menu_id, first_menu_name,
+                second_menu_id: g.second_menu_id, second_menu_name,
+                capacity: g.capacity, description: g.description,
+                vibes: g.vibes, status: g.status, group_id: g.group_id,
+                created_at: g.created_at,
+                joined_count: count_map.get(&g.id).copied().unwrap_or(0),
+                is_joined:    joined_set.contains(&g.id),
+                member_avatars,
+                member_usernames,
+            }
+        })
+        .collect();
+
+    Ok((result, total))
+}
+
 // ── 搭子局详情（分步查询） ────────────────────────────────────────────────────
 
 pub async fn get(

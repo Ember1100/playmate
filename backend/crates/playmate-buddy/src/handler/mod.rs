@@ -5,3 +5,4 @@ pub mod career;
 pub mod gather;
 pub mod invitation;
 pub mod menu;
+pub mod search;
