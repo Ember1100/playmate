@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../shared/widgets/pm_image.dart';
+import '../../data/gather_model.dart';
+import '../../data/gather_repository.dart';
+import '../../providers/gather_provider.dart';
 
 /// 搭子 Tab 首页
-class BuddyScreen extends StatefulWidget {
+class BuddyScreen extends ConsumerStatefulWidget {
   const BuddyScreen({super.key});
 
   @override
-  State<BuddyScreen> createState() => _BuddyScreenState();
+  ConsumerState<BuddyScreen> createState() => _BuddyScreenState();
 }
 
-class _BuddyScreenState extends State<BuddyScreen> with WidgetsBindingObserver {
+class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingObserver {
   // 搭子局 分类
   static const _categories = ['生活', '学习', '兴趣', '游戏', '自定义'];
   int _catIndex = 0;
@@ -551,23 +555,67 @@ class _BuddyScreenState extends State<BuddyScreen> with WidgetsBindingObserver {
   }
 
   // ── 搭子局卡片列表（Sliver）───────────────────────────────────────────────
-  SliverList _buildGatherListSliver() {
-    final items = _mockGatherItems(_categories[_catIndex]);
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (_, i) => Padding(
-          padding: EdgeInsets.fromLTRB(12, i == 0 ? 10 : 0, 12, 12),
-          child: _GatherCard(item: items[i], onTap: () => _showGatherDetail(context, items[i])),
+  Widget _buildGatherListSliver() {
+    final cat = _categories[_catIndex];
+    // "自定义" 暂不走远程，后续扩展
+    final providerCat = cat == '自定义' ? null : cat;
+    final asyncGathers = ref.watch(gatherListProvider(providerCat));
+
+    return asyncGathers.when(
+      loading: () => const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: Center(child: CircularProgressIndicator(color: Color(0xFFFF7A00))),
         ),
-        childCount: items.length,
       ),
+      error: (e, _) => SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(children: [
+            const Icon(Icons.wifi_off_outlined, size: 40, color: Color(0xFFCCCCCC)),
+            const SizedBox(height: 8),
+            const Text('加载失败，下拉刷新重试', style: TextStyle(color: Color(0xFF999999))),
+            TextButton(
+              onPressed: () => ref.read(gatherListProvider(providerCat).notifier).refresh(),
+              child: const Text('重试', style: TextStyle(color: Color(0xFFFF7A00))),
+            ),
+          ]),
+        ),
+      ),
+      data: (items) {
+        if (items.isEmpty) {
+          return const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(40),
+              child: Column(children: [
+                Icon(Icons.group_outlined, size: 48, color: Color(0xFFDDDDDD)),
+                SizedBox(height: 8),
+                Text('暂无搭子局，来发起第一个吧', style: TextStyle(color: Color(0xFF999999))),
+              ]),
+            ),
+          );
+        }
+        return SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (_, i) => Padding(
+              padding: EdgeInsets.fromLTRB(12, i == 0 ? 10 : 0, 12, 12),
+              child: _GatherCard(
+                item: items[i],
+                onTap: () => _showGatherDetail(context, items[i], providerCat),
+              ),
+            ),
+            childCount: items.length,
+          ),
+        );
+      },
     );
   }
 
-  void _showGatherDetail(BuildContext context, _GatherItem item) {
+  void _showGatherDetail(BuildContext context, Gather item, String? category) {
     showModalBottomSheet(
-      context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
-      builder: (_) => _GatherDetailSheet(item: item),
+      context: context, isScrollControlled: true, useRootNavigator: true,
+      backgroundColor: Colors.transparent, enableDrag: false,
+      builder: (_) => _GatherDetailSheet(item: item, category: category),
     );
   }
 
@@ -613,42 +661,18 @@ class _BuddyScreenState extends State<BuddyScreen> with WidgetsBindingObserver {
   }
 
   void _showPublishDialog() {
+    final cat = _categories[_catIndex];
+    final providerCat = cat == '自定义' ? null : cat;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      useRootNavigator: true,     // 挂到根 Navigator，不受 Scaffold resizeToAvoidBottomInset 影响
+      useRootNavigator: true,
       enableDrag: false,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _PublishGatherSheet(),
+      builder: (_) => _PublishGatherSheet(defaultCategory: providerCat),
     );
   }
 
-  // ── 搭子局模拟数据 ────────────────────────────────────────────────────────
-  List<_GatherItem> _mockGatherItems(String cat) {
-    switch (cat) {
-      case '生活':
-        return [
-          _GatherItem(title: '周末饭局 · 探秘地道川菜', location: '上海市黄浦区南京东路888号', startTime: DateTime(2026, 4, 19, 18, 30, 0), endTime: DateTime(2026, 4, 19, 21, 0, 0), theme: '饭搭子', themeColor: const Color(0xFFFF7A00), joinedCount: 4, totalCount: 8, avatars: ['https://picsum.photos/seed/u1/40/40', 'https://picsum.photos/seed/u2/40/40', 'https://picsum.photos/seed/u3/40/40']),
-          _GatherItem(title: '遛猫下午茶 · 宠物友好咖啡馆', location: '上海市徐汇区衡山路12号', startTime: DateTime(2026, 4, 20, 14, 0, 0), endTime: DateTime(2026, 4, 20, 17, 0, 0), theme: '遛宠搭子', themeColor: const Color(0xFF5DCAA5), joinedCount: 2, totalCount: 6, avatars: ['https://picsum.photos/seed/u4/40/40', 'https://picsum.photos/seed/u5/40/40']),
-          _GatherItem(title: '周五观影 · 《流浪地球3》首映', location: '上海市浦东新区张江CGV影城', startTime: DateTime(2026, 4, 18, 19, 40, 0), endTime: DateTime(2026, 4, 18, 22, 0, 0), theme: '观影搭子', themeColor: const Color(0xFF9C27B0), joinedCount: 5, totalCount: 10, avatars: ['https://picsum.photos/seed/u6/40/40', 'https://picsum.photos/seed/u7/40/40', 'https://picsum.photos/seed/u8/40/40']),
-        ];
-      case '学习':
-        return [
-          _GatherItem(title: '考研备战 · 图书馆打卡团', location: '上海图书馆东馆（陆家嘴）', startTime: DateTime(2026, 4, 16, 9, 0, 0), endTime: DateTime(2026, 4, 16, 18, 0, 0), theme: '考研搭子', themeColor: const Color(0xFF2196F3), joinedCount: 6, totalCount: 10, avatars: ['https://picsum.photos/seed/s1/40/40', 'https://picsum.photos/seed/s2/40/40']),
-          _GatherItem(title: '英语角 · 外教口语练习', location: '上海市静安区南京西路1788号', startTime: DateTime(2026, 4, 17, 19, 0, 0), endTime: DateTime(2026, 4, 17, 21, 0, 0), theme: '语言搭子', themeColor: const Color(0xFF4CAF50), joinedCount: 3, totalCount: 8, avatars: ['https://picsum.photos/seed/s3/40/40']),
-        ];
-      case '兴趣':
-        return [
-          _GatherItem(title: '街头摄影 · 外滩黄金时刻', location: '上海市黄浦区中山东一路外滩', startTime: DateTime(2026, 4, 19, 17, 30, 0), endTime: DateTime(2026, 4, 19, 20, 0, 0), theme: '摄影搭子', themeColor: const Color(0xFFE91E63), joinedCount: 3, totalCount: 6, avatars: ['https://picsum.photos/seed/h1/40/40', 'https://picsum.photos/seed/h2/40/40']),
-        ];
-      case '游戏':
-        return [
-          _GatherItem(title: '剧本杀 · 悬疑推理专场', location: '上海市杨浦区五角场线索屋', startTime: DateTime(2026, 4, 20, 13, 0, 0), endTime: DateTime(2026, 4, 20, 18, 0, 0), theme: '剧本杀搭子', themeColor: const Color(0xFF795548), joinedCount: 4, totalCount: 6, avatars: ['https://picsum.photos/seed/g1/40/40', 'https://picsum.photos/seed/g2/40/40', 'https://picsum.photos/seed/g3/40/40']),
-        ];
-      default:
-        return [];
-    }
-  }
 
   // ── 搭子人物模拟数据 ──────────────────────────────────────────────────────
   List<_BuddyPerson> _mockBuddyPeople(String tag) {
@@ -814,25 +838,12 @@ class _CardDecoPainter extends CustomPainter {
 // ═════════════════════════════════════════════════════════════════════════════
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  搭子局数据模型 + 卡片
+//  搭子局卡片
 // ═════════════════════════════════════════════════════════════════════════════
-
-class _GatherItem {
-  const _GatherItem({required this.title, required this.location, required this.startTime, required this.endTime, required this.theme, required this.themeColor, required this.joinedCount, required this.totalCount, required this.avatars});
-  final String title;
-  final String location;
-  final DateTime startTime;
-  final DateTime endTime;
-  final String theme;
-  final Color themeColor;
-  final int joinedCount;
-  final int totalCount;
-  final List<String> avatars;
-}
 
 class _GatherCard extends StatelessWidget {
   const _GatherCard({required this.item, required this.onTap});
-  final _GatherItem item;
+  final Gather item;
   final VoidCallback onTap;
 
   String _fmt(DateTime dt) {
@@ -845,7 +856,7 @@ class _GatherCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isFull = item.joinedCount >= item.totalCount;
+    final color = item.themeColor;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -868,23 +879,21 @@ class _GatherCard extends StatelessWidget {
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [item.themeColor.withAlpha(210), item.themeColor.withAlpha(130)],
+                        colors: [color.withAlpha(210), color.withAlpha(130)],
                       ),
                     ),
                   ),
                 ),
-                // Dark overlay
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                   child: Container(color: Colors.black.withAlpha(56)),
                 ),
-                // Category badge — bottom left
                 Positioned(
                   bottom: 10, left: 12,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                     decoration: BoxDecoration(
-                      color: item.themeColor.withAlpha(230),
+                      color: color.withAlpha(230),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(item.theme, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white)),
@@ -899,14 +908,13 @@ class _GatherCard extends StatelessWidget {
                 Text(item.title,
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF222222), height: 1.35)),
                 const SizedBox(height: 8),
-                // Location
-                Row(children: [
-                  const Icon(Icons.location_on_outlined, size: 12, color: Color(0xFFC8BFB5)),
-                  const SizedBox(width: 5),
-                  Expanded(child: Text(item.location, style: const TextStyle(fontSize: 12, color: Color(0xFF888888)), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                ]),
-                const SizedBox(height: 4),
-                // Start time
+                if (item.location != null)
+                  Row(children: [
+                    const Icon(Icons.location_on_outlined, size: 12, color: Color(0xFFC8BFB5)),
+                    const SizedBox(width: 5),
+                    Expanded(child: Text(item.location!, style: const TextStyle(fontSize: 12, color: Color(0xFF888888)), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  ]),
+                if (item.location != null) const SizedBox(height: 4),
                 Row(children: [
                   const Icon(Icons.schedule_rounded, size: 12, color: Color(0xFF4ADE80)),
                   const SizedBox(width: 5),
@@ -915,7 +923,6 @@ class _GatherCard extends StatelessWidget {
                   Text(_fmt(item.startTime), style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
                 ]),
                 const SizedBox(height: 4),
-                // End time
                 Row(children: [
                   const Icon(Icons.cancel_outlined, size: 12, color: Color(0xFFF87171)),
                   const SizedBox(width: 5),
@@ -924,37 +931,33 @@ class _GatherCard extends StatelessWidget {
                   Text(_fmt(item.endTime), style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
                 ]),
                 const SizedBox(height: 10),
-                // Footer
                 Row(children: [
-                  // Avatar stack (24px, -6px overlap)
-                  SizedBox(
-                    height: 24,
-                    width: item.avatars.length * 18.0 + 6,
-                    child: Stack(children: List.generate(item.avatars.length, (i) => Positioned(
-                      left: i * 18.0,
-                      child: Container(
-                        width: 24, height: 24,
-                        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
-                        child: ClipOval(child: PmImage(item.avatars[i], width: 24, height: 24, fit: BoxFit.cover)),
-                      ),
-                    ))),
-                  ),
-                  const SizedBox(width: 10),
-                  Text('${item.joinedCount}/${item.totalCount} 人参加', style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: isFull ? null : () {},
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: isFull ? const Color(0xFFF0ECE6) : const Color(0xFFFF8C42),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text('参加', style: TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w500,
-                        color: isFull ? const Color(0xFFC8BFB5) : Colors.white,
-                      )),
+                  if (item.memberAvatars.isNotEmpty)
+                    SizedBox(
+                      height: 24,
+                      width: item.memberAvatars.length * 18.0 + 6,
+                      child: Stack(children: List.generate(item.memberAvatars.length, (i) => Positioned(
+                        left: i * 18.0,
+                        child: Container(
+                          width: 24, height: 24,
+                          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                          child: ClipOval(child: PmImage(item.memberAvatars[i], width: 24, height: 24, fit: BoxFit.cover)),
+                        ),
+                      ))),
                     ),
+                  if (item.memberAvatars.isNotEmpty) const SizedBox(width: 10),
+                  Text('${item.joinedCount}/${item.capacity} 人参加', style: const TextStyle(fontSize: 12, color: Color(0xFF888888))),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: item.isFull ? const Color(0xFFF0ECE6) : const Color(0xFFFF8C42),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text('参加', style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w500,
+                      color: item.isFull ? const Color(0xFFC8BFB5) : Colors.white,
+                    )),
                   ),
                 ]),
               ]),
@@ -1113,9 +1116,10 @@ class _OrigFeedCard extends StatelessWidget {
 //  搭子局详情弹窗
 // ═════════════════════════════════════════════════════════════════════════════
 
-class _GatherDetailSheet extends StatelessWidget {
-  const _GatherDetailSheet({required this.item});
-  final _GatherItem item;
+class _GatherDetailSheet extends ConsumerWidget {
+  const _GatherDetailSheet({required this.item, required this.category});
+  final Gather item;
+  final String? category;
 
   String _fmt(DateTime dt) {
     return '${dt.year}年${dt.month.toString().padLeft(2, '0')}月'
@@ -1126,65 +1130,126 @@ class _GatherDetailSheet extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final topPad = MediaQuery.of(context).padding.top;
+    final color = item.themeColor;
+    // 从 provider 取最新状态（参加/退出后乐观更新）
+    final gathers = ref.watch(gatherListProvider(category)).valueOrNull;
+    final current = gathers?.firstWhere((g) => g.id == item.id, orElse: () => item) ?? item;
     return Container(
-      height: MediaQuery.of(context).size.height * 0.7,
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      height: MediaQuery.of(context).size.height,
+      decoration: const BoxDecoration(color: Colors.white),
       child: Column(
         children: [
-          const SizedBox(height: 12),
-          Container(width: 36, height: 4, decoration: BoxDecoration(color: const Color(0xFFDDDDDD), borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(child: Text(item.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF222222)))),
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: item.themeColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12), border: Border.all(color: item.themeColor.withValues(alpha: 0.4))),
-                child: Text(item.theme, style: TextStyle(fontSize: 12, color: item.themeColor, fontWeight: FontWeight.w600)),
+          // ── 彩色渐变头部 ──────────────────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.fromLTRB(20, topPad + 48, 20, 20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [color, color.withValues(alpha: 0.7)],
               ),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(Icons.close, color: Colors.white, size: 24),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(12)),
+                  child: Text(current.theme, style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
+                ),
+              ]),
+              const SizedBox(height: 14),
+              Text(current.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
             ]),
           ),
-          const SizedBox(height: 20),
-          const Divider(height: 1),
+          // ── 内容区 ────────────────────────────────────────────────────────
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                _DetailRow(icon: Icons.location_on_outlined, iconColor: const Color(0xFFFF7A00), label: '活动地点', value: item.location),
+                if (current.location != null)
+                  _DetailRow(icon: Icons.location_on_outlined, iconColor: const Color(0xFFFF7A00), label: '活动地点', value: current.location!),
+                if (current.location != null) const SizedBox(height: 16),
+                _DetailRow(icon: Icons.play_circle_outline, iconColor: const Color(0xFF5DCAA5), label: '开始时间', value: _fmt(current.startTime)),
                 const SizedBox(height: 16),
-                _DetailRow(icon: Icons.play_circle_outline, iconColor: const Color(0xFF5DCAA5), label: '开始时间', value: _fmt(item.startTime)),
-                const SizedBox(height: 16),
-                _DetailRow(icon: Icons.stop_circle_outlined, iconColor: const Color(0xFFE24B4A), label: '结束时间', value: _fmt(item.endTime)),
+                _DetailRow(icon: Icons.stop_circle_outlined, iconColor: const Color(0xFFE24B4A), label: '结束时间', value: _fmt(current.endTime)),
+                if (current.description != null && current.description!.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _DetailRow(icon: Icons.notes_outlined, iconColor: const Color(0xFF9C27B0), label: '活动说明', value: current.description!),
+                ],
+                if (current.vibes.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Row(children: current.vibes.map((v) => Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: const Color(0xFFFFF3E8), borderRadius: BorderRadius.circular(12)),
+                    child: Text(v, style: const TextStyle(fontSize: 12, color: Color(0xFFFF7A00))),
+                  )).toList()),
+                ],
                 const SizedBox(height: 24),
                 const Text('参加的搭子', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF333333))),
                 const SizedBox(height: 12),
                 Row(children: [
-                  ...item.avatars.map((url) => Padding(
+                  ...current.memberAvatars.map((url) => Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: Container(width: 40, height: 40, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFFEEEEEE), width: 2)), child: ClipOval(child: PmImage(url, width: 40, height: 40, fit: BoxFit.cover))),
                   )),
-                  ...List.generate((item.totalCount - item.joinedCount).clamp(0, 3), (_) => Padding(
+                  ...List.generate((current.capacity - current.joinedCount).clamp(0, 3), (_) => Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: Container(width: 40, height: 40, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFFDDDDDD), width: 1.5), color: const Color(0xFFF5F5F5)), child: const Icon(Icons.add, size: 18, color: Color(0xFFCCCCCC))),
                   )),
                 ]),
                 const SizedBox(height: 8),
-                Text('已参加 ${item.joinedCount} 人，共 ${item.totalCount} 个名额', style: const TextStyle(fontSize: 13, color: Color(0xFF888888))),
+                Text('已参加 ${current.joinedCount} 人，共 ${current.capacity} 个名额', style: const TextStyle(fontSize: 13, color: Color(0xFF888888))),
               ]),
             ),
           ),
+          // ── 底部按钮 ──────────────────────────────────────────────────────
           Container(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(context).padding.bottom + 12),
             decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Color(0xFFF0F0F0)))),
             child: SizedBox(
               width: double.infinity, height: 48,
               child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF7A00), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                child: Text('立即参加（${item.joinedCount}/${item.totalCount}）', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                onPressed: current.isFull ? null : () async {
+                  try {
+                    if (current.isJoined) {
+                      await ref.read(gatherListProvider(category).notifier).leave(current.id);
+                    } else {
+                      await ref.read(gatherListProvider(category).notifier).join(current.id);
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+                      );
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: current.isJoined
+                      ? const Color(0xFFF0ECE6)
+                      : const Color(0xFFFF7A00),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(
+                  current.isFull
+                      ? '名额已满'
+                      : current.isJoined
+                          ? '退出搭子局'
+                          : '立即参加（${current.joinedCount}/${current.capacity}）',
+                  style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w700,
+                    color: current.isJoined ? const Color(0xFF888888) : Colors.white,
+                  ),
+                ),
               ),
             ),
           ),
@@ -1219,14 +1284,15 @@ class _DetailRow extends StatelessWidget {
 //  发起搭子局弹窗
 // ═════════════════════════════════════════════════════════════════════════════
 
-class _PublishGatherSheet extends StatefulWidget {
-  const _PublishGatherSheet();
+class _PublishGatherSheet extends ConsumerStatefulWidget {
+  const _PublishGatherSheet({this.defaultCategory});
+  final String? defaultCategory;
 
   @override
-  State<_PublishGatherSheet> createState() => _PublishGatherSheetState();
+  ConsumerState<_PublishGatherSheet> createState() => _PublishGatherSheetState();
 }
 
-class _PublishGatherSheetState extends State<_PublishGatherSheet> {
+class _PublishGatherSheetState extends ConsumerState<_PublishGatherSheet> {
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _customPeopleCtrl = TextEditingController();
@@ -1239,6 +1305,7 @@ class _PublishGatherSheetState extends State<_PublishGatherSheet> {
   bool _customPeopleMode = false;
   String? _location;
   final Set<int> _vibeSet = {};
+  bool _submitting = false;
 
   static const _categories = [
     ('🍜', '吃货'),
@@ -1253,7 +1320,67 @@ class _PublishGatherSheetState extends State<_PublishGatherSheet> {
   void dispose() {
     _titleCtrl.dispose();
     _descCtrl.dispose();
+    _customPeopleCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请填写活动名称')));
+      return;
+    }
+    if (_categoryIndex == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请选择活动类型')));
+      return;
+    }
+    if (_startTime == null || _endTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请选择活动时间')));
+      return;
+    }
+    if (_endTime!.isBefore(_startTime!) || _endTime!.isAtSameMomentAs(_startTime!)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('结束时间必须晚于开始时间')));
+      return;
+    }
+
+    final cat = _categories[_categoryIndex!];
+    final theme = cat.$2;
+    final mainCategory = themeToCategory(theme);
+    final capacity = _customPeopleMode
+        ? (int.tryParse(_customPeopleCtrl.text) ?? 8)
+        : (_peopleCount ?? 8);
+
+    setState(() => _submitting = true);
+    try {
+      final gather = await ref.read(gatherRepositoryProvider).createGather(
+        CreateGatherRequest(
+          title:       title,
+          location:    _location,
+          startTime:   _startTime!,
+          endTime:     _endTime!,
+          category:    mainCategory,
+          theme:       theme,
+          capacity:    capacity,
+          description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+          vibes:       _vibeSet.map((i) => _vibes[i]).toList(),
+        ),
+      );
+      // 插入到对应分类列表头部
+      ref.read(gatherListProvider(mainCategory).notifier).prepend(gather);
+      // 如果当前 defaultCategory 不同，也刷新 null（全部）
+      if (widget.defaultCategory != mainCategory) {
+        ref.read(gatherListProvider(widget.defaultCategory).notifier).prepend(gather);
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('发布失败：$e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   // 时间格式：2026年4月17日 20:30
@@ -1418,14 +1545,16 @@ class _PublishGatherSheetState extends State<_PublishGatherSheet> {
                   ],
                 ),
                 child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: _submitting ? null : _submit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     shadowColor: Colors.transparent,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                   ),
-                  child: const Text('发布搭子局',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                  child: _submitting
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('发布搭子局',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
               ),
             ),

@@ -39,3 +39,45 @@ pub struct BuddyCandidate {
     pub bio:        Option<String>,
     pub gender:     i16,
 }
+
+// ── 搭子局 ────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, FromRow)]
+pub struct BuddyGather {
+    pub id:          Uuid,
+    pub creator_id:  Uuid,
+    pub title:       String,
+    pub location:    Option<String>,
+    pub start_time:  DateTime<Utc>,
+    pub end_time:    DateTime<Utc>,
+    pub category:    String,
+    pub theme:       String,
+    pub capacity:    i32,
+    pub description: Option<String>,
+    pub vibes:       Vec<String>,
+    pub status:      i16,
+    pub created_at:  DateTime<Utc>,
+}
+
+/// 搭子局列表项（附带统计信息）
+#[derive(Debug, FromRow)]
+pub struct BuddyGatherWithStats {
+    pub id:               Uuid,
+    pub creator_id:       Uuid,
+    pub creator_username: String,
+    pub creator_avatar:   Option<String>,
+    pub title:            String,
+    pub location:         Option<String>,
+    pub start_time:       DateTime<Utc>,
+    pub end_time:         DateTime<Utc>,
+    pub category:         String,
+    pub theme:            String,
+    pub capacity:         i32,
+    pub description:      Option<String>,
+    pub vibes:            Vec<String>,
+    pub status:           i16,
+    pub created_at:       DateTime<Utc>,
+    pub joined_count:     i64,
+    pub is_joined:        bool,
+    pub member_avatars:   Vec<String>,
+}

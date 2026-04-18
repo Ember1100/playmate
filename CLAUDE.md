@@ -104,6 +104,45 @@ pub async fn handler_name(
 
 禁止 handler 层直接写超过3行的 SQL（抽到 repo 函数）、禁止硬编码配置值、禁止异步上下文中阻塞 IO。
 
+### Repo 查询规范：分步查询
+
+**禁止** 在单条 SQL 中使用多层 JOIN + 子查询 + 聚合混合（可读性差、难调试、易 SQL 注入）。
+
+需要关联多张表时，采用**分步查询**：
+
+```rust
+// ✅ 正确：分步查询，每步单表或简单 JOIN
+pub async fn list(...) -> AppResult<Vec<XxxWithStats>> {
+    // Step 1：主表单查，获取基础数据
+    let rows: Vec<Xxx> = sqlx::query_as("SELECT ... FROM xxx WHERE ... LIMIT $1 OFFSET $2")
+        .bind(limit).bind(offset).fetch_all(pool).await?;
+    if rows.is_empty() { return Ok(vec![]); }
+
+    // Step 2：收集关联 ID
+    let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
+
+    // Step 3：批量查询关联数据（ANY($1) 传数组）
+    let related: Vec<(Uuid, String)> = sqlx::query_as(
+        "SELECT foreign_id, value FROM other_table WHERE foreign_id = ANY($1)"
+    ).bind(&ids).fetch_all(pool).await?;
+
+    // Step 4：用 HashMap 组装结果，避免嵌套循环
+    let map: HashMap<Uuid, String> = related.into_iter().collect();
+    let result = rows.into_iter().map(|r| XxxWithStats {
+        value: map.get(&r.id).cloned().unwrap_or_default(),
+        ..
+    }).collect();
+
+    Ok(result)
+}
+
+// ❌ 禁止：单 SQL 混合多层 JOIN + 子查询 + 聚合
+// SELECT g.*, u.username, (SELECT COUNT(*) FROM members WHERE ...) AS cnt,
+//        ARRAY(SELECT avatar FROM ...) AS avatars FROM gathers g JOIN users u ...
+```
+
+适用场景：列表页需要聚合统计（计数、头像列表、是否关注等）时。
+
 ### WebSocket 协议
 
 统一入口 `WS /api/v1/im/ws`，处理私信 + 社群消息。

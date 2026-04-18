@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::model::{BuddyCandidate, BuddyInvitation, BuddyRequest};
+use crate::model::{BuddyCandidate, BuddyGatherWithStats, BuddyInvitation, BuddyRequest};
 
 // ── Requests ─────────────────────────────────────────────────────────────────
 
@@ -62,6 +62,35 @@ pub struct InvitationsQuery {
     pub page:  i64,
     #[serde(default = "default_limit")]
     pub limit: i64,
+}
+
+// ── 搭子局 Request ────────────────────────────────────────────────────────────
+
+#[derive(Deserialize, Validate)]
+pub struct CreateGatherRequest {
+    #[validate(length(min = 1, max = 100))]
+    pub title:       String,
+    #[validate(length(max = 200))]
+    pub location:    Option<String>,
+    pub start_time:  DateTime<Utc>,
+    pub end_time:    DateTime<Utc>,
+    pub category:    String, // 生活/学习/兴趣/游戏/自定义
+    pub theme:       String, // 吃货/看看/运动/游戏/其他
+    #[validate(range(min = 2, max = 50))]
+    pub capacity:    i32,
+    #[validate(length(max = 1000))]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub vibes:       Vec<String>,
+}
+
+#[derive(Deserialize)]
+pub struct GatherListQuery {
+    pub category: Option<String>,
+    #[serde(default = "default_page")]
+    pub page:     i64,
+    #[serde(default = "default_limit")]
+    pub limit:    i64,
 }
 
 fn default_page() -> i64 { 1 }
@@ -127,6 +156,55 @@ pub struct InvitationResponse {
     pub location:      Option<String>,
     pub status:        i16,
     pub created_at:    DateTime<Utc>,
+}
+
+// ── 搭子局 Response ───────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct GatherResponse {
+    pub id:               String,
+    pub creator_id:       String,
+    pub creator_username: String,
+    pub creator_avatar:   Option<String>,
+    pub title:            String,
+    pub location:         Option<String>,
+    pub start_time:       DateTime<Utc>,
+    pub end_time:         DateTime<Utc>,
+    pub category:         String,
+    pub theme:            String,
+    pub capacity:         i32,
+    pub description:      Option<String>,
+    pub vibes:            Vec<String>,
+    pub status:           i16,
+    pub joined_count:     i64,
+    pub is_joined:        bool,
+    pub member_avatars:   Vec<String>,
+    pub created_at:       DateTime<Utc>,
+}
+
+impl From<BuddyGatherWithStats> for GatherResponse {
+    fn from(g: BuddyGatherWithStats) -> Self {
+        Self {
+            id:               g.id.to_string(),
+            creator_id:       g.creator_id.to_string(),
+            creator_username: g.creator_username,
+            creator_avatar:   g.creator_avatar,
+            title:            g.title,
+            location:         g.location,
+            start_time:       g.start_time,
+            end_time:         g.end_time,
+            category:         g.category,
+            theme:            g.theme,
+            capacity:         g.capacity,
+            description:      g.description,
+            vibes:            g.vibes,
+            status:           g.status,
+            joined_count:     g.joined_count,
+            is_joined:        g.is_joined,
+            member_avatars:   g.member_avatars,
+            created_at:       g.created_at,
+        }
+    }
 }
 
 impl From<BuddyInvitation> for InvitationResponse {

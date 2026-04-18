@@ -7,7 +7,7 @@ use axum::{
 
 use playmate_common::AppState;
 
-use crate::handler::{buddy, career, invitation};
+use crate::handler::{buddy, career, gather, invitation};
 
 pub fn buddy_routes() -> Router<AppState> {
     Router::new()
@@ -24,4 +24,10 @@ pub fn buddy_routes() -> Router<AppState> {
         // 职业搭子阵地
         .route("/career",                  get(career::list_career))
         .route("/career/:user_id",         get(career::get_career))
+        // 搭子局
+        .route("/gathers",                 post(gather::create_gather).get(gather::list_gathers))
+        .route("/gathers/:id",             get(gather::get_gather))
+        .route("/gathers/:id/join",        post(gather::join_gather))
+        .route("/gathers/:id/leave",       post(gather::leave_gather))
+        .route("/gathers/:id/cancel",      post(gather::cancel_gather))
 }

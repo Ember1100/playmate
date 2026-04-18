@@ -12,7 +12,32 @@
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d[''''data''''][''''items''''][0], indent=2\\)\\)\")",
       "Bash(curl -s \"http://8.138.190.48:8080/api/v1/users/97010157-d76b-4eb7-ac92-328abe54e0c1\" -H \"Authorization: Bearer test\")",
       "Bash(curl -sv \"http://8.138.190.48:8080/api/v1/users/97010157-d76b-4eb7-ac92-328abe54e0c1\")",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//c/Users/huangqi/github/playmate/infra/migrations/**)",
+      "Bash(done)",
+      "Bash(ls C:/Users/huangqi/github/playmate/infra/.env*)",
+      "Bash(docker ps:*)",
+      "Bash(ls C:/Users/huangqi/github/playmate/.env*)",
+      "Bash(ls C:/Users/huangqi/github/playmate/backend/.env*)",
+      "Bash(cmd /c \"where docker\")",
+      "Bash(cmd /c \"docker ps\")",
+      "Bash(cmd /c \"docker --version && docker ps --format \\\\\"table {{.Names}}\\\\t{{.Status}}\\\\\"\" 2>&1)",
+      "Bash(cd:*)",
+      "Bash(git -C /c/Users/huangqi/github/playmate add backend/crates/playmate-user/src/handler/auth.rs backend/crates/playmate-user/src/service/auth_service.rs backend/crates/playmate-user/src/model/auth.rs backend/crates/playmate-user/src/routes.rs)",
+      "Bash(git -C:*)",
+      "Bash(git -C /c/Users/huangqi/github/playmate push origin main)",
+      "Bash(cargo build:*)",
+      "Bash(dart analyze:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(jobs)",
+      "Bash(npx uni:*)",
+      "Bash(grep:*)",
+      "Bash(sqlx migrate:*)"
     ]
   }
 }
