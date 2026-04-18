@@ -237,11 +237,12 @@ pub async fn list_messages(
     limit: i64,
     offset: i64,
 ) -> AppResult<Vec<Message>> {
-    sqlx::query_as::<_, Message>(
+    // DESC 取最新的 N 条，reverse 后以 ASC 顺序返回给前端（最旧在上，最新在下）
+    let mut msgs = sqlx::query_as::<_, Message>(
         "SELECT id, conversation_id, sender_id, type, content, media_url, is_recalled, created_at
          FROM messages
          WHERE conversation_id = $1
-         ORDER BY created_at ASC
+         ORDER BY created_at DESC
          LIMIT $2 OFFSET $3",
     )
     .bind(conversation_id)
@@ -249,7 +250,9 @@ pub async fn list_messages(
     .bind(offset)
     .fetch_all(pool)
     .await
-    .map_err(AppError::Database)
+    .map_err(AppError::Database)?;
+    msgs.reverse();
+    Ok(msgs)
 }
 
 /// 更新成员最后阅读时间
@@ -415,12 +418,12 @@ pub async fn list_group_messages(
     limit:    i64,
     offset:   i64,
 ) -> AppResult<Vec<GroupMessageFull>> {
-    // Step 1：获取消息列表
-    let msgs: Vec<GroupMessage> = sqlx::query_as::<_, GroupMessage>(
+    // Step 1：DESC 取最新的 N 条，reverse 后以 ASC 顺序组装结果
+    let mut msgs: Vec<GroupMessage> = sqlx::query_as::<_, GroupMessage>(
         "SELECT id, group_id, sender_id, type, content, media_url, is_recalled, created_at
          FROM social_group_messages
          WHERE group_id = $1
-         ORDER BY created_at ASC
+         ORDER BY created_at DESC
          LIMIT $2 OFFSET $3",
     )
     .bind(group_id)
@@ -429,6 +432,7 @@ pub async fn list_group_messages(
     .fetch_all(pool)
     .await
     .map_err(AppError::Database)?;
+    msgs.reverse();
 
     if msgs.is_empty() {
         return Ok(vec![]);
