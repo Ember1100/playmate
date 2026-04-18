@@ -1447,7 +1447,7 @@ class _PublishGatherSheetState extends State<_PublishGatherSheet> {
           end: Alignment.bottomRight,
         ),
       ),
-      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 32, 16, 20),
+      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 48, 16, 20),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
