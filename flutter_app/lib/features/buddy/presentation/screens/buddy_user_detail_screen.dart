@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../shared/widgets/pm_image.dart';
 import '../../../../shared/widgets/pm_swipe_back.dart';
 import '../../../im/data/im_repository.dart';
+import '../../../im/providers/im_provider.dart';
 
 /// 搭子用户详情页
 class BuddyUserDetailScreen extends ConsumerStatefulWidget {
@@ -54,6 +55,8 @@ class _BuddyUserDetailScreenState extends ConsumerState<BuddyUserDetailScreen>
     final messenger = ScaffoldMessenger.of(context);
     try {
       final convId = await ref.read(imRepositoryProvider).createConversation(widget.userId!);
+      // 刷新会话列表，确保消息 Tab 实时出现新对话
+      ref.invalidate(conversationsProvider);
       if (mounted) {
         router.push('/im/chat/$convId', extra: {
           'username': widget.username,

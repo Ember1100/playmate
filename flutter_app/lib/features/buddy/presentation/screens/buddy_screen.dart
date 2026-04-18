@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../shared/widgets/pm_image.dart';
 import '../../../im/data/im_repository.dart';
+import '../../../im/providers/im_provider.dart';
 import '../../data/gather_model.dart';
 import '../../data/gather_repository.dart';
 import '../../providers/gather_provider.dart';
@@ -124,17 +125,21 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
 
   // 从搜索结果直接发起私信（创建会话后跳转）
   Future<void> _startChat(SearchUser user) async {
+    final router = GoRouter.of(context);
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final convId = await ref.read(imRepositoryProvider).createConversation(user.id);
+      // 刷新会话列表，确保消息 Tab 实时出现新对话
+      ref.invalidate(conversationsProvider);
       if (mounted) {
-        context.push('/im/chat/$convId', extra: {
+        router.push('/im/chat/$convId', extra: {
           'username': user.username,
           'otherAvatarUrl': user.avatarUrl,
         });
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(content: Text('创建会话失败，请重试')),
         );
       }
