@@ -857,9 +857,9 @@ class _GatherCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── 90px image strip ──────────────────────────────────────────
+            // ── image strip ───────────────────────────────────────────────
             SizedBox(
-              height: 90,
+              height: 70,
               child: Stack(fit: StackFit.expand, children: [
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
@@ -1360,11 +1360,8 @@ class _PublishGatherSheetState extends State<_PublishGatherSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.92,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      height: MediaQuery.of(context).size.height,
+      decoration: const BoxDecoration(color: Colors.white),
       child: Column(
         children: [
           // ── 橙色渐变头部 ──────────────────────────────────────────────────
@@ -1449,9 +1446,8 @@ class _PublishGatherSheetState extends State<_PublishGatherSheet> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 44, 16, 20),
+      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 16, 16, 20),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
