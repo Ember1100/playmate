@@ -341,7 +341,7 @@ pub async fn list_my_groups(pool: &PgPool, user_id: Uuid) -> AppResult<Vec<Group
 
     // Step 4：计算未读数
     let unread_rows: Vec<(Uuid, i64)> = sqlx::query_as(
-        "SELECT group_id, COUNT(*)::BIGINT
+        "SELECT m.group_id, COUNT(*)::BIGINT
          FROM social_group_messages m
          JOIN social_group_members gm ON gm.group_id = m.group_id AND gm.user_id = $2
          WHERE m.group_id = ANY($1)

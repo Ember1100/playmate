@@ -486,7 +486,13 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
           children: tabs.map((tab) {
             final selected = tab.$1 == _selectedFirstMenuId;
             return GestureDetector(
-              onTap: () => setState(() { _selectedFirstMenuId = tab.$1; _subTagIndex = -1; }),
+              onTap: () {
+                final newId = tab.$1;
+                if (newId != _selectedFirstMenuId) {
+                  ref.invalidate(gatherListProvider(newId));
+                }
+                setState(() { _selectedFirstMenuId = newId; _subTagIndex = -1; });
+              },
               child: Container(
                 margin: const EdgeInsets.only(right: 4),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
