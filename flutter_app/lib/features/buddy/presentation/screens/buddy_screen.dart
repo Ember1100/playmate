@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../shared/widgets/pm_image.dart';
 import '../../../im/data/im_repository.dart';
 import '../../../im/providers/im_provider.dart';
@@ -30,20 +31,11 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
   bool _hasResults = false;
   bool _searchLoading = false;
   BuddySearchResult? _searchResult;
-  int _searchTab = 0;
 
-  static const _hotTags = ['爬山搭子', '读书搭子', '健身搭子', '游戏搭子', '电影搭子', '旅行搭子', '摄影搭子', '美食搭子'];
-  static const _searchTabs = ['精选搭子', '新人搭子', '附近搭子', '活跃搭子'];
-  static const _people = [
-    _PersonData(emoji: '😊', g1: Color(0xFFFDE68A), g2: Color(0xFFFB923C), name: '阿毛', online: true),
-    _PersonData(emoji: '🙂', g1: Color(0xFFFED7AA), g2: Color(0xFFF97316), name: '大欢', online: false),
-    _PersonData(emoji: '😄', g1: Color(0xFFD9F99D), g2: Color(0xFF84CC16), name: '小雅', online: true),
-    _PersonData(emoji: '😃', g1: Color(0xFFBFDBFE), g2: Color(0xFF60A5FA), name: '邓子', online: false),
-    _PersonData(emoji: '😆', g1: Color(0xFFFECDD3), g2: Color(0xFFF43F5E), name: '欢哥', online: true),
-    _PersonData(emoji: '🙃', g1: Color(0xFFC7D2FE), g2: Color(0xFF818CF8), name: '小鱼', online: false),
-    _PersonData(emoji: '😁', g1: Color(0xFFA7F3D0), g2: Color(0xFF34D399), name: '老王', online: false),
-    _PersonData(emoji: '😏', g1: Color(0xFFFDE68A), g2: Color(0xFFFBBF24), name: '冬冬', online: true),
-  ];
+  // ── 搜索历史 ──────────────────────────────────────────────────────────────
+  static const _historyKey = 'buddy_search_history';
+  static const _historyMax = 10;
+  List<String> _history = [];
 
   // 搜索模式：只要 _searchActive=true 就拦截返回手势，避免中间帧导致的漏拦截
   bool get _isSearching => _searchActive;
@@ -59,6 +51,38 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
         setState(() {}); // 失焦时仅刷新，不清 _searchActive
       }
     });
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_historyKey) ?? [];
+    if (mounted) setState(() => _history = list);
+  }
+
+  Future<void> _addHistory(String keyword) async {
+    final trimmed = keyword.trim();
+    if (trimmed.isEmpty) return;
+    final list = List<String>.from(_history)
+      ..remove(trimmed)          // 去重：先移除旧的
+      ..insert(0, trimmed);      // 置顶
+    if (list.length > _historyMax) list.removeRange(_historyMax, list.length);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_historyKey, list);
+    if (mounted) setState(() => _history = list);
+  }
+
+  Future<void> _removeHistory(String keyword) async {
+    final list = List<String>.from(_history)..remove(keyword);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_historyKey, list);
+    if (mounted) setState(() => _history = list);
+  }
+
+  Future<void> _clearHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_historyKey);
+    if (mounted) setState(() => _history = []);
   }
 
   @override
@@ -89,7 +113,7 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
     }
   }
 
-  // 提交搜索（Enter / 热搜词点击）→ 调 API
+  // 提交搜索（Enter / 历史词点击）→ 调 API
   Future<void> _doSearch() async {
     final text = _searchCtrl.text.trim();
     if (text.isEmpty) {
@@ -106,6 +130,7 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
           _searchLoading = false;
         });
       }
+      await _addHistory(text); // 搜索成功后写入历史
     } catch (_) {
       if (mounted) setState(() { _searchLoading = false; _hasResults = false; });
     }
@@ -347,98 +372,94 @@ class _BuddyScreenState extends ConsumerState<BuddyScreen> with WidgetsBindingOb
     );
   }
 
-  // ── 搜索激活但未出结果：热搜词 + Tab + 人物宫格 ───────────────────────────
+  // ── 搜索激活但未出结果：搜索历史 ─────────────────────────────────────────
 
   Widget _buildSearchDefaultContent() {
+    if (_history.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.history_rounded, size: 44, color: Color(0xFFDDDDDD)),
+            SizedBox(height: 10),
+            Text('暂无搜索记录', style: TextStyle(fontSize: 14, color: Color(0xFFBBBBBB))),
+          ],
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 4),
-          // 热搜标签
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
-            child: Text('大家都在搜',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFFFF8C42))),
-          ),
+          const SizedBox(height: 8),
+          // 标题行
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+            padding: const EdgeInsets.fromLTRB(16, 0, 12, 10),
+            child: Row(
+              children: [
+                const Text('搜索历史',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF888780))),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () {
+                    showDialog<void>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('清除历史记录'),
+                        content: const Text('确定要清除全部搜索历史吗？'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+                          TextButton(
+                            onPressed: () { Navigator.pop(ctx); _clearHistory(); },
+                            child: const Text('清除', style: TextStyle(color: Color(0xFFE24B4A))),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    child: Text('清除', style: TextStyle(fontSize: 12, color: Color(0xFFBBBBBB))),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // 历史词列表
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _hotTags.map((tag) => GestureDetector(
+              children: _history.map((word) => GestureDetector(
                 onTap: () async {
-                  _searchCtrl.text = tag;
+                  _searchCtrl.text = word;
                   await _doSearch();
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFFF8C42).withValues(alpha: 0.25), width: 0.5),
+                    border: Border.all(color: const Color(0xFFEEEEEE), width: 0.8),
                   ),
-                  child: Text(tag, style: const TextStyle(fontSize: 13, color: Color(0xFF555550))),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.history_rounded, size: 13, color: Color(0xFFCCCCCC)),
+                      const SizedBox(width: 4),
+                      Text(word, style: const TextStyle(fontSize: 13, color: Color(0xFF555550))),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => _removeHistory(word),
+                        child: const Icon(Icons.close, size: 13, color: Color(0xFFCCCCCC)),
+                      ),
+                    ],
+                  ),
                 ),
               )).toList(),
-            ),
-          ),
-          // Tab 切换
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0ECE7),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.all(3),
-              child: Row(
-                children: List.generate(_searchTabs.length, (i) {
-                  final active = i == _searchTab;
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() => _searchTab = i),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(vertical: 7),
-                        decoration: BoxDecoration(
-                          color: active ? Colors.white : Colors.transparent,
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: active
-                              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 4, offset: const Offset(0, 1))]
-                              : null,
-                        ),
-                        child: Text(
-                          _searchTabs[i],
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: active ? FontWeight.w500 : FontWeight.w400,
-                            color: active ? const Color(0xFFFF8C42) : const Color(0xFF888780),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ),
-          // 5列人物宫格
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 5,
-                mainAxisSpacing: 14,
-                crossAxisSpacing: 6,
-                childAspectRatio: 0.75,
-              ),
-              itemCount: _people.length,
-              itemBuilder: (_, i) => _PersonCell(data: _people[i]),
             ),
           ),
           const SizedBox(height: 24),
@@ -2169,79 +2190,6 @@ class _Section extends StatelessWidget {
     );
   }
 }
-
-// ═════════════════════════════════════════════════════════════════════════════
-//  搜索相关：人物数据 + 人物格子
-// ═════════════════════════════════════════════════════════════════════════════
-
-class _PersonData {
-  const _PersonData({
-    required this.emoji,
-    required this.g1,
-    required this.g2,
-    required this.name,
-    required this.online,
-  });
-  final String emoji;
-  final Color g1;
-  final Color g2;
-  final String name;
-  final bool online;
-}
-
-class _PersonCell extends StatelessWidget {
-  const _PersonCell({required this.data});
-  final _PersonData data;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [data.g1, data.g2],
-                ),
-              ),
-              child: Center(child: Text(data.emoji, style: const TextStyle(fontSize: 24))),
-            ),
-            if (data.online)
-              Positioned(
-                bottom: 1,
-                right: 1,
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4ADE80),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFFFDF9F6), width: 2),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 5),
-        Text(data.name,
-            style: const TextStyle(fontSize: 11, color: Color(0xFF888780)),
-            overflow: TextOverflow.ellipsis),
-      ],
-    );
-  }
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-//  搜索相关：结果数据 + 结果卡片
-// ═════════════════════════════════════════════════════════════════════════════
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  搜索结果：用户卡片
