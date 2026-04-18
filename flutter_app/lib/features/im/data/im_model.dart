@@ -66,25 +66,6 @@ class GroupSession {
   final DateTime? lastMessageAt;
   final int unreadCount;
   final int memberCount;
-
-  static final mockList = <GroupSession>[
-    GroupSession(
-      id: 'mock-group-1',
-      name: '🏃 晨跑搭子局',
-      lastMessage: '小赵：明早六点操场见！',
-      lastMessageAt: DateTime.now().subtract(const Duration(minutes: 15)),
-      unreadCount: 3,
-      memberCount: 8,
-    ),
-    GroupSession(
-      id: 'mock-group-2',
-      name: '🏔️ 周末爬山队',
-      lastMessage: '路线已发群里，记得带水',
-      lastMessageAt: DateTime.now().subtract(const Duration(hours: 4)),
-      unreadCount: 1,
-      memberCount: 12,
-    ),
-  ];
 }
 
 // ── 群聊消息 ──────────────────────────────────────────────────────────────────
@@ -173,35 +154,6 @@ class AppNotification {
         id: id, type: type, title: title, content: content,
         isRead: isRead ?? this.isRead, createdAt: createdAt, relatedId: relatedId,
       );
-
-  static final mockList = <AppNotification>[
-    AppNotification(
-      id: 'mock-notif-sys-1',
-      type: NotificationType.system,
-      title: '平台公告',
-      content: '搭伴新功能「搭子局」正式上线！快去约起来吧 🎉',
-      isRead: false,
-      createdAt: DateTime.now().subtract(const Duration(minutes: 30)),
-    ),
-    AppNotification(
-      id: 'mock-notif-buddy-1',
-      type: NotificationType.buddyRequest,
-      title: '新的搭子申请',
-      content: '陈思远 想和你成为搭子，备注：喜欢跑步，一起约？',
-      isRead: false,
-      createdAt: DateTime.now().subtract(const Duration(minutes: 10)),
-      relatedId: 'mock-request-1',
-    ),
-    AppNotification(
-      id: 'mock-notif-interact-1',
-      type: NotificationType.interaction,
-      title: '点赞了你的话题',
-      content: '小赵 赞了你发布的话题「最近发现一条绝美骑行路线」',
-      isRead: false,
-      createdAt: DateTime.now().subtract(const Duration(minutes: 45)),
-      relatedId: 'mock-topic-1',
-    ),
-  ];
 }
 
 class Message {
