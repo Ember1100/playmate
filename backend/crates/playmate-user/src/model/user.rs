@@ -15,6 +15,7 @@ pub struct User {
     pub bio:           Option<String>,
     pub gender:        i16,
     pub birthday:      Option<NaiveDate>,
+    pub city:          Option<String>,
     pub is_verified:   bool,
     pub is_new_user:   bool,
     pub is_active:     bool,

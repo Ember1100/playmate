@@ -33,14 +33,12 @@ pub async fn get_me(
     State(state): State<AppState>,
     current_user: CurrentUser,
 ) -> Result<impl IntoResponse, AppError> {
-    let user = user_repo::find_by_id(&state.db, current_user.id).await?;
-    let (tags, city) = tokio::try_join!(
+    let (user, tags) = tokio::try_join!(
+        user_repo::find_by_id(&state.db, current_user.id),
         user_repo::get_user_tags(&state.db, current_user.id),
-        user_repo::get_user_city(&state.db, current_user.id),
     )?;
     let mut resp = UserResponse::from(user);
     resp.tags = tags.into_iter().map(|t| t.name).collect();
-    resp.city = city;
     Ok(ApiResponse::ok(resp))
 }
 
@@ -61,17 +59,22 @@ pub async fn update_me(
         auth_service::check_age_limit(birthday)?;
     }
 
-    let user = user_repo::update_user(
-        &state.db,
-        current_user.id,
-        payload.username.as_deref(),
-        payload.bio.as_deref(),
-        payload.gender,
-        payload.birthday,
-        payload.avatar_url.as_deref(),
-    )
-    .await?;
-    Ok(ApiResponse::ok(UserResponse::from(user)))
+    let (user, tags) = tokio::try_join!(
+        user_repo::update_user(
+            &state.db,
+            current_user.id,
+            payload.username.as_deref(),
+            payload.bio.as_deref(),
+            payload.gender,
+            payload.birthday,
+            payload.avatar_url.as_deref(),
+            payload.city.as_deref(),
+        ),
+        user_repo::get_user_tags(&state.db, current_user.id),
+    )?;
+    let mut resp = UserResponse::from(user);
+    resp.tags = tags.into_iter().map(|t| t.name).collect();
+    Ok(ApiResponse::ok(resp))
 }
 
 /// 获取当前用户成长值/积分/信用分
@@ -89,14 +92,12 @@ pub async fn get_user(
     Path(user_id): Path<Uuid>,
     _current_user: CurrentUser,
 ) -> Result<impl IntoResponse, AppError> {
-    let user = user_repo::find_by_id(&state.db, user_id).await?;
-    let (tags, city) = tokio::try_join!(
+    let (user, tags) = tokio::try_join!(
+        user_repo::find_by_id(&state.db, user_id),
         user_repo::get_user_tags(&state.db, user_id),
-        user_repo::get_user_city(&state.db, user_id),
     )?;
     let mut resp = UserResponse::from(user);
     resp.tags = tags.into_iter().map(|t| t.name).collect();
-    resp.city = city;
     Ok(ApiResponse::ok(resp))
 }
 

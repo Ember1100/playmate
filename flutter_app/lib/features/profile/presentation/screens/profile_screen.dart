@@ -21,7 +21,7 @@ class ProfileScreen extends ConsumerWidget {
             // 顶部 header
             _buildHeader(context),
             // 用户信息区
-            _buildUserInfo(user),
+            _buildUserInfo(context, user),
             const SizedBox(height: 24),
             // 成长统计卡
             _buildStatsCard(),
@@ -89,70 +89,74 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildUserInfo(dynamic user) {
+  Widget _buildUserInfo(BuildContext context, dynamic user) {
     final username = user?.username as String? ?? '搭伴用户';
     final initial = username.isNotEmpty ? username.substring(0, 1).toUpperCase() : '?';
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(15, 0, 15, 16),
-      child: Row(
-        children: [
-          // 头像
-          CircleAvatar(
-            radius: 32,
-            backgroundColor: const Color(0xFFFFD166),
-            backgroundImage: user?.avatarUrl != null
-                ? PmImageProvider(user!.avatarUrl as String)
-                : null,
-            child: user?.avatarUrl == null
-                ? Text(
-                    initial,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  )
-                : null,
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  username,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF222222),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(
-                      'ID: ${user?.id?.toString().substring(0, 8) ?? "00000000"}',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF888888)),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFB703),
-                        borderRadius: BorderRadius.circular(10),
+    return InkWell(
+      onTap: () => context.push('/profile/edit'),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(15, 0, 15, 16),
+        child: Row(
+          children: [
+            // 头像
+            CircleAvatar(
+              radius: 32,
+              backgroundColor: const Color(0xFFFFD166),
+              backgroundImage: user?.avatarUrl != null
+                  ? PmImageProvider(user!.avatarUrl as String)
+                  : null,
+              child: user?.avatarUrl == null
+                  ? Text(
+                      initial,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
-                      child: const Text(
-                        'Lv.5',
-                        style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                    )
+                  : null,
             ),
-          ),
-        ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    username,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF222222),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(
+                        'ID: ${user?.id?.toString().substring(0, 8) ?? "00000000"}',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF888888)),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFB703),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text(
+                          'Lv.5',
+                          style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Color(0xFFCCCCCC), size: 20),
+          ],
+        ),
       ),
     );
   }

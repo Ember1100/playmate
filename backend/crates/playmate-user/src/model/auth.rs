@@ -72,6 +72,8 @@ pub struct UpdateProfileRequest {
     pub gender:     Option<i16>,
     pub birthday:   Option<NaiveDate>,
     pub avatar_url: Option<String>,
+    #[validate(length(max = 50, message = "城市名称最多 50 字"))]
+    pub city:       Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -151,7 +153,7 @@ impl From<User> for UserResponse {
             is_verified: u.is_verified,
             is_new_user: u.is_new_user,
             created_at:  u.created_at,
-            city:        None,
+            city:        u.city,
             tags:        vec![],
         }
     }

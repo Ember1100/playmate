@@ -12,7 +12,7 @@ use crate::model::user::{CareerProfile, Tag, User, UserOauth, UserStats};
 
 const USER_COLS: &str =
     "id, username, email, phone, password_hash, avatar_url, bio,
-     gender, birthday, is_verified, is_new_user, is_active, last_seen_at,
+     gender, birthday, city, is_verified, is_new_user, is_active, last_seen_at,
      created_at, updated_at";
 
 // ── 用户查询 ──────────────────────────────────────────────────────────────────
@@ -155,6 +155,7 @@ pub async fn update_user(
     gender:     Option<i16>,
     birthday:   Option<NaiveDate>,
     avatar_url: Option<&str>,
+    city:       Option<&str>,
 ) -> AppResult<User> {
     sqlx::query_as::<_, User>(&format!(
         "UPDATE users SET
@@ -163,6 +164,7 @@ pub async fn update_user(
              gender     = COALESCE($4, gender),
              birthday   = COALESCE($5, birthday),
              avatar_url = COALESCE($6, avatar_url),
+             city       = COALESCE($7, city),
              updated_at = NOW()
          WHERE id = $1 AND is_active = true
          RETURNING {USER_COLS}"
@@ -173,12 +175,23 @@ pub async fn update_user(
     .bind(gender)
     .bind(birthday)
     .bind(avatar_url)
+    .bind(city)
     .fetch_one(pool)
     .await
     .map_err(|e| match e {
         sqlx::Error::RowNotFound => AppError::NotFound(format!("用户 {} 不存在", id)),
         _ => AppError::Database(e),
     })
+}
+
+pub async fn update_user_city(pool: &PgPool, user_id: Uuid, city: Option<&str>) -> AppResult<()> {
+    sqlx::query("UPDATE users SET city = $2, updated_at = NOW() WHERE id = $1")
+        .bind(user_id)
+        .bind(city)
+        .execute(pool)
+        .await
+        .map_err(AppError::Database)?;
+    Ok(())
 }
 
 /// 问卷完成后清除 is_new_user 标记
@@ -297,16 +310,6 @@ pub async fn upsert_questionnaire(
     Ok(())
 }
 
-/// 获取用户所在城市（来自问卷）
-pub async fn get_user_city(pool: &PgPool, user_id: Uuid) -> AppResult<Option<String>> {
-    let row: Option<(Option<String>,)> =
-        sqlx::query_as("SELECT city FROM user_questionnaire WHERE user_id = $1")
-            .bind(user_id)
-            .fetch_optional(pool)
-            .await
-            .map_err(AppError::Database)?;
-    Ok(row.and_then(|(c,)| c))
-}
 
 // ── 职业档案 ──────────────────────────────────────────────────────────────────
 

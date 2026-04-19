@@ -16,6 +16,7 @@ import '../features/im/presentation/screens/chat_screen.dart';
 import '../features/im/presentation/screens/group_chat_screen.dart';
 import '../features/im/presentation/screens/im_screen.dart';
 import '../features/market/presentation/screens/market_screen.dart';
+import '../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../features/profile/presentation/screens/profile_screen.dart';
 import '../shared/widgets/pm_bottom_nav.dart';
 import '../shared/widgets/pm_placeholder.dart';
@@ -229,6 +230,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               path:    '/profile',
               builder: (_, _) => const ProfileScreen(),
               routes: [
+                GoRoute(path: 'edit',          builder: (_, _) => const EditProfileScreen()),
                 GoRoute(path: 'notifications', builder: (_, _) => const PmPlaceholderScreen(title: '消息中心')),
                 GoRoute(path: 'collects',      builder: (_, _) => const PmPlaceholderScreen(title: '我的收藏')),
                 GoRoute(path: 'member',        builder: (_, _) => const PmPlaceholderScreen(title: '会员中心')),

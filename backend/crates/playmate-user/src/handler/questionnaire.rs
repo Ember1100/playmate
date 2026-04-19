@@ -26,6 +26,7 @@ pub async fn submit_questionnaire(
     let purposes = serde_json::to_value(payload.purposes.unwrap_or_default())
         .map_err(|e| AppError::Internal(anyhow::anyhow!("{}", e)))?;
 
+    let city = payload.city.clone();
     user_repo::upsert_questionnaire(
         &state.db,
         current_user.id,
@@ -38,6 +39,11 @@ pub async fn submit_questionnaire(
         payload.life_goal.as_deref(),
     )
     .await?;
+
+    // 同步城市到 users 表，方便 profile 接口直接读取
+    if city.is_some() {
+        user_repo::update_user_city(&state.db, current_user.id, city.as_deref()).await?;
+    }
 
     // 清除新人标记，后续登录不再跳转问卷
     user_repo::mark_questionnaire_done(&state.db, current_user.id).await?;
