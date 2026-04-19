@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::model::{BuddyCandidate, BuddyGatherWithStats, BuddyInvitation, BuddyRequest};
+use crate::model::{BuddyCandidateWithProfile, BuddyGatherWithStats, BuddyInvitation, BuddyRequest};
 
 // ── Requests ─────────────────────────────────────────────────────────────────
 
@@ -188,16 +188,20 @@ pub struct CandidateResponse {
     pub avatar_url: Option<String>,
     pub bio:        Option<String>,
     pub gender:     i16,
+    pub tags:       Vec<String>,
+    pub city:       Option<String>,
 }
 
-impl From<BuddyCandidate> for CandidateResponse {
-    fn from(c: BuddyCandidate) -> Self {
+impl From<BuddyCandidateWithProfile> for CandidateResponse {
+    fn from(c: BuddyCandidateWithProfile) -> Self {
         Self {
             id:         c.id,
             username:   c.username,
             avatar_url: c.avatar_url,
             bio:        c.bio,
             gender:     c.gender,
+            tags:       c.tags,
+            city:       c.city,
         }
     }
 }

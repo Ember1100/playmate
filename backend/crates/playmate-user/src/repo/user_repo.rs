@@ -297,6 +297,17 @@ pub async fn upsert_questionnaire(
     Ok(())
 }
 
+/// 获取用户所在城市（来自问卷）
+pub async fn get_user_city(pool: &PgPool, user_id: Uuid) -> AppResult<Option<String>> {
+    let row: Option<(Option<String>,)> =
+        sqlx::query_as("SELECT city FROM user_questionnaire WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(AppError::Database)?;
+    Ok(row.and_then(|(c,)| c))
+}
+
 // ── 职业档案 ──────────────────────────────────────────────────────────────────
 
 pub async fn get_career(pool: &PgPool, user_id: Uuid) -> AppResult<Option<CareerProfile>> {

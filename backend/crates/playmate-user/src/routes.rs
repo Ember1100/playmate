@@ -33,6 +33,8 @@ pub fn user_routes() -> Router<AppState> {
         .route("/me/questionnaire",   post(questionnaire::submit_questionnaire))
         .route("/me/career",          get(profile::get_my_career).put(profile::update_my_career))
         .route("/:id",                get(profile::get_user))
+        .route("/:id/tags",           get(tag::get_user_tags_by_id))
+        .route("/:id/stats",          get(profile::get_user_stats))
         .route("/:id/career",         get(profile::get_user_career))
 }
 

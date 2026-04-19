@@ -34,7 +34,14 @@ pub async fn get_me(
     current_user: CurrentUser,
 ) -> Result<impl IntoResponse, AppError> {
     let user = user_repo::find_by_id(&state.db, current_user.id).await?;
-    Ok(ApiResponse::ok(UserResponse::from(user)))
+    let (tags, city) = tokio::try_join!(
+        user_repo::get_user_tags(&state.db, current_user.id),
+        user_repo::get_user_city(&state.db, current_user.id),
+    )?;
+    let mut resp = UserResponse::from(user);
+    resp.tags = tags.into_iter().map(|t| t.name).collect();
+    resp.city = city;
+    Ok(ApiResponse::ok(resp))
 }
 
 /// 更新当前用户 Profile
@@ -83,7 +90,14 @@ pub async fn get_user(
     _current_user: CurrentUser,
 ) -> Result<impl IntoResponse, AppError> {
     let user = user_repo::find_by_id(&state.db, user_id).await?;
-    Ok(ApiResponse::ok(UserResponse::from(user)))
+    let (tags, city) = tokio::try_join!(
+        user_repo::get_user_tags(&state.db, user_id),
+        user_repo::get_user_city(&state.db, user_id),
+    )?;
+    let mut resp = UserResponse::from(user);
+    resp.tags = tags.into_iter().map(|t| t.name).collect();
+    resp.city = city;
+    Ok(ApiResponse::ok(resp))
 }
 
 /// 获取我的职业档案
@@ -116,6 +130,16 @@ pub async fn update_my_career(
     )
     .await?;
     Ok(ApiResponse::ok(CareerProfileResponse::from(career)))
+}
+
+/// 获取指定用户的公开统计数据（信用分/等级）
+pub async fn get_user_stats(
+    State(state): State<AppState>,
+    Path(user_id): Path<Uuid>,
+    _current_user: CurrentUser,
+) -> Result<impl IntoResponse, AppError> {
+    let stats = user_repo::get_stats(&state.db, user_id).await?;
+    Ok(ApiResponse::ok(UserStatsResponse::from(stats)))
 }
 
 /// 获取指定用户的职业档案（公开）

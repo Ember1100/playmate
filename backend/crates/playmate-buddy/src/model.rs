@@ -30,7 +30,7 @@ pub struct BuddyInvitation {
     pub created_at:    DateTime<Utc>,
 }
 
-/// 搭子候选人（简要用户信息）
+/// 搭子候选人（简要用户信息，FromRow 直接映射）
 #[derive(Debug, FromRow)]
 pub struct BuddyCandidate {
     pub id:         Uuid,
@@ -38,6 +38,18 @@ pub struct BuddyCandidate {
     pub avatar_url: Option<String>,
     pub bio:        Option<String>,
     pub gender:     i16,
+}
+
+/// 搭子候选人（含兴趣标签和城市，分步查询后组装）
+#[derive(Debug)]
+pub struct BuddyCandidateWithProfile {
+    pub id:         Uuid,
+    pub username:   String,
+    pub avatar_url: Option<String>,
+    pub bio:        Option<String>,
+    pub gender:     i16,
+    pub tags:       Vec<String>,
+    pub city:       Option<String>,
 }
 
 // ── 搭子局 ────────────────────────────────────────────────────────────────────

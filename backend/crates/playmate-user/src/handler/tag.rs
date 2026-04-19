@@ -5,7 +5,12 @@
 //! - GET /api/v1/users/me/tags   ← 我的标签
 //! - PUT /api/v1/users/me/tags   ← 设置我的标签（全量替换）
 
-use axum::{extract::State, response::IntoResponse, Json};
+use axum::{
+    extract::{Path, State},
+    response::IntoResponse,
+    Json,
+};
+use uuid::Uuid;
 
 use playmate_common::{error::AppError, response::ApiResponse, AppState, CurrentUser};
 
@@ -23,6 +28,16 @@ pub async fn get_my_tags(
     current_user: CurrentUser,
 ) -> Result<impl IntoResponse, AppError> {
     let tags = user_repo::get_user_tags(&state.db, current_user.id).await?;
+    Ok(ApiResponse::ok(tags))
+}
+
+/// 获取指定用户的公开标签
+pub async fn get_user_tags_by_id(
+    State(state): State<AppState>,
+    Path(user_id): Path<Uuid>,
+    _current_user: CurrentUser,
+) -> Result<impl IntoResponse, AppError> {
+    let tags = user_repo::get_user_tags(&state.db, user_id).await?;
     Ok(ApiResponse::ok(tags))
 }
 

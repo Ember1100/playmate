@@ -195,8 +195,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                 GoRoute(path: 'user/:id',    builder: (_, state) {
                   final extra = state.extra as Map<String, dynamic>?;
                   return BuddyUserDetailScreen(
-                    userId:    state.pathParameters['id'],
-                    username:  extra?['username'] as String?,
+                    userId:    state.pathParameters['id']!,
+                    username:  extra?['username']  as String?,
                     avatarUrl: extra?['avatarUrl'] as String?,
                   );
                 }),

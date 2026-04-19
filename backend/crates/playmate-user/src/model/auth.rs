@@ -133,6 +133,8 @@ pub struct UserResponse {
     pub is_verified: bool,
     pub is_new_user: bool,
     pub created_at:  DateTime<Utc>,
+    pub city:        Option<String>,
+    pub tags:        Vec<String>,
 }
 
 impl From<User> for UserResponse {
@@ -149,6 +151,8 @@ impl From<User> for UserResponse {
             is_verified: u.is_verified,
             is_new_user: u.is_new_user,
             created_at:  u.created_at,
+            city:        None,
+            tags:        vec![],
         }
     }
 }
