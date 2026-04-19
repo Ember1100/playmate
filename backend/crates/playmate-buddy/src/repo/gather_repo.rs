@@ -12,23 +12,40 @@ use crate::model::{BuddyGather, BuddyGatherWithStats};
 // ── 列名常量 ─────────────────────────────────────────────────────────────────
 
 const GATHER_COLS: &str =
-    "id, creator_id, title, location, start_time, end_time,
-     first_menu_id, second_menu_id, capacity, description, vibes, status, group_id, created_at";
+    "id, creator_id, title, location, landmark, start_time, end_time,
+     first_menu_id, second_menu_id, capacity, description, vibes,
+     activity_mode, status, group_id, created_at,
+     schedule, deadline, fee_type, fee_amount,
+     age_min, age_max, gender_pref, cover_url,
+     require_real_name, require_review, allow_transfer";
 
 // ── 创建搭子局 ────────────────────────────────────────────────────────────────
 
 pub async fn create(
-    pool:           &PgPool,
-    creator_id:     Uuid,
-    title:          &str,
-    location:       Option<&str>,
-    start_time:     chrono::DateTime<chrono::Utc>,
-    end_time:       chrono::DateTime<chrono::Utc>,
-    first_menu_id:  Option<i64>,
-    second_menu_id: Option<i64>,
-    capacity:       i32,
-    description:    Option<&str>,
-    vibes:          &[String],
+    pool:              &PgPool,
+    creator_id:        Uuid,
+    title:             &str,
+    location:          Option<&str>,
+    landmark:          Option<&str>,
+    start_time:        chrono::DateTime<chrono::Utc>,
+    end_time:          chrono::DateTime<chrono::Utc>,
+    first_menu_id:     Option<i64>,
+    second_menu_id:    Option<i64>,
+    capacity:          i32,
+    description:       Option<&str>,
+    vibes:             &[String],
+    activity_mode:     &str,
+    schedule:          Option<&str>,
+    deadline:          Option<chrono::DateTime<chrono::Utc>>,
+    fee_type:          i16,
+    fee_amount:        Option<f64>,
+    age_min:           i16,
+    age_max:           i16,
+    gender_pref:       i16,
+    cover_url:         Option<&str>,
+    require_real_name: bool,
+    require_review:    bool,
+    allow_transfer:    bool,
 ) -> AppResult<BuddyGather> {
     // Step 1：创建对应的群聊
     let (group_id,): (Uuid,) = sqlx::query_as(
@@ -45,14 +62,18 @@ pub async fn create(
     // Step 2：创建搭子局，绑定 group_id
     let gather = sqlx::query_as::<_, BuddyGather>(&format!(
         "INSERT INTO buddy_gathers
-             (creator_id, title, location, start_time, end_time,
-              first_menu_id, second_menu_id, capacity, description, vibes, group_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+             (creator_id, title, location, landmark, start_time, end_time,
+              first_menu_id, second_menu_id, capacity, description, vibes, activity_mode,
+              group_id, schedule, deadline, fee_type, fee_amount,
+              age_min, age_max, gender_pref, cover_url,
+              require_real_name, require_review, allow_transfer)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
          RETURNING {GATHER_COLS}"
     ))
     .bind(creator_id)
     .bind(title)
     .bind(location)
+    .bind(landmark)
     .bind(start_time)
     .bind(end_time)
     .bind(first_menu_id)
@@ -60,7 +81,19 @@ pub async fn create(
     .bind(capacity)
     .bind(description)
     .bind(vibes)
+    .bind(activity_mode)
     .bind(group_id)
+    .bind(schedule)
+    .bind(deadline)
+    .bind(fee_type)
+    .bind(fee_amount)
+    .bind(age_min)
+    .bind(age_max)
+    .bind(gender_pref)
+    .bind(cover_url)
+    .bind(require_real_name)
+    .bind(require_review)
+    .bind(allow_transfer)
     .fetch_one(pool)
     .await
     .map_err(AppError::Database)?;
@@ -212,6 +245,7 @@ pub async fn list(
                 creator_avatar,
                 title:            g.title,
                 location:         g.location,
+                landmark:         g.landmark,
                 start_time:       g.start_time,
                 end_time:         g.end_time,
                 first_menu_id:    g.first_menu_id,
@@ -221,9 +255,21 @@ pub async fn list(
                 capacity:         g.capacity,
                 description:      g.description,
                 vibes:            g.vibes,
+                activity_mode:    g.activity_mode,
                 status:           g.status,
                 group_id:         g.group_id,
                 created_at:       g.created_at,
+                schedule:         g.schedule,
+                deadline:         g.deadline,
+                fee_type:         g.fee_type,
+                fee_amount:       g.fee_amount,
+                age_min:          g.age_min,
+                age_max:          g.age_max,
+                gender_pref:      g.gender_pref,
+                cover_url:        g.cover_url,
+                require_real_name: g.require_real_name,
+                require_review:   g.require_review,
+                allow_transfer:   g.allow_transfer,
                 joined_count:     count_map.get(&g.id).copied().unwrap_or(0),
                 is_joined:        joined_set.contains(&g.id),
                 member_avatars,
@@ -369,13 +415,21 @@ pub async fn search(
             BuddyGatherWithStats {
                 id: g.id, creator_id: g.creator_id,
                 creator_username, creator_avatar,
-                title: g.title, location: g.location,
+                title: g.title, location: g.location, landmark: g.landmark,
                 start_time: g.start_time, end_time: g.end_time,
                 first_menu_id: g.first_menu_id, first_menu_name,
                 second_menu_id: g.second_menu_id, second_menu_name,
                 capacity: g.capacity, description: g.description,
-                vibes: g.vibes, status: g.status, group_id: g.group_id,
+                vibes: g.vibes, activity_mode: g.activity_mode,
+                status: g.status, group_id: g.group_id,
                 created_at: g.created_at,
+                schedule: g.schedule, deadline: g.deadline,
+                fee_type: g.fee_type, fee_amount: g.fee_amount,
+                age_min: g.age_min, age_max: g.age_max,
+                gender_pref: g.gender_pref, cover_url: g.cover_url,
+                require_real_name: g.require_real_name,
+                require_review: g.require_review,
+                allow_transfer: g.allow_transfer,
                 joined_count: count_map.get(&g.id).copied().unwrap_or(0),
                 is_joined:    joined_set.contains(&g.id),
                 member_avatars,
@@ -477,6 +531,7 @@ pub async fn get(
         creator_avatar,
         title: g.title,
         location: g.location,
+        landmark: g.landmark,
         start_time: g.start_time,
         end_time: g.end_time,
         first_menu_id: g.first_menu_id,
@@ -486,9 +541,21 @@ pub async fn get(
         capacity: g.capacity,
         description: g.description,
         vibes: g.vibes,
+        activity_mode: g.activity_mode,
         status: g.status,
         group_id: g.group_id,
         created_at: g.created_at,
+        schedule: g.schedule,
+        deadline: g.deadline,
+        fee_type: g.fee_type,
+        fee_amount: g.fee_amount,
+        age_min: g.age_min,
+        age_max: g.age_max,
+        gender_pref: g.gender_pref,
+        cover_url: g.cover_url,
+        require_real_name: g.require_real_name,
+        require_review: g.require_review,
+        allow_transfer: g.allow_transfer,
         joined_count,
         is_joined,
         member_avatars,

@@ -8,6 +8,7 @@ class Gather {
     this.creatorAvatar,
     required this.title,
     this.location,
+    this.landmark,
     required this.startTime,
     required this.endTime,
     this.firstMenuId,
@@ -17,8 +18,20 @@ class Gather {
     required this.capacity,
     this.description,
     required this.vibes,
+    required this.activityMode,
     required this.status,
     this.groupId,
+    this.schedule,
+    this.deadline,
+    this.feeType = 0,
+    this.feeAmount,
+    this.ageMin = 18,
+    this.ageMax = 35,
+    this.genderPref = 0,
+    this.coverUrl,
+    this.requireRealName = false,
+    this.requireReview = false,
+    this.allowTransfer = false,
     required this.joinedCount,
     required this.isJoined,
     required this.memberAvatars,
@@ -32,6 +45,7 @@ class Gather {
   final String? creatorAvatar;
   final String title;
   final String? location;
+  final String? landmark;
   final DateTime startTime;
   final DateTime endTime;
   final int? firstMenuId;
@@ -41,12 +55,24 @@ class Gather {
   final int capacity;
   final String? description;
   final List<String> vibes;
+  final String activityMode; // "offline" | "online" | "invite"
   final int status;
   final String? groupId;
+  final String? schedule;
+  final DateTime? deadline;
+  final int feeType;    // 0=免费 1=按需付费 2=AA制
+  final double? feeAmount;
+  final int ageMin;
+  final int ageMax;
+  final int genderPref; // 0=不限 1=仅男 2=仅女
+  final String? coverUrl;
+  final bool requireRealName;
+  final bool requireReview;
+  final bool allowTransfer;
   final int joinedCount;
   final bool isJoined;
-  final List<String> memberAvatars;     // 与 memberUsernames 一一对应，无头像时为空串
-  final List<String> memberUsernames;   // 参加成员用户名（最多 5 人）
+  final List<String> memberAvatars;
+  final List<String> memberUsernames;
   final DateTime createdAt;
 
   bool get isFull => joinedCount >= capacity;
@@ -65,6 +91,21 @@ class Gather {
     }
   }
 
+  String get activityModeLabel {
+    switch (activityMode) {
+      case 'online': return '线上局';
+      case 'invite': return '约人局';
+      default:       return '线下局';
+    }
+  }
+
+  String get feeLabel {
+    if (feeType == 0) return '免费';
+    if (feeType == 2) return 'AA 制';
+    if (feeAmount != null) return '¥${feeAmount!.toStringAsFixed(feeAmount! % 1 == 0 ? 0 : 2)}/人';
+    return '按需付费';
+  }
+
   factory Gather.fromJson(Map<String, dynamic> json) {
     return Gather(
       id:               json['id'] as String,
@@ -73,6 +114,7 @@ class Gather {
       creatorAvatar:    json['creator_avatar'] as String?,
       title:            json['title'] as String,
       location:         json['location'] as String?,
+      landmark:         json['landmark'] as String?,
       startTime:        DateTime.parse(json['start_time'] as String).toLocal(),
       endTime:          DateTime.parse(json['end_time'] as String).toLocal(),
       firstMenuId:      json['first_menu_id'] as int?,
@@ -82,8 +124,22 @@ class Gather {
       capacity:         json['capacity'] as int,
       description:      json['description'] as String?,
       vibes:            (json['vibes'] as List<dynamic>? ?? []).cast<String>(),
+      activityMode:     json['activity_mode'] as String? ?? 'offline',
       status:           json['status'] as int,
       groupId:          json['group_id'] as String?,
+      schedule:         json['schedule'] as String?,
+      deadline:         json['deadline'] != null
+          ? DateTime.parse(json['deadline'] as String).toLocal()
+          : null,
+      feeType:          json['fee_type'] as int? ?? 0,
+      feeAmount:        (json['fee_amount'] as num?)?.toDouble(),
+      ageMin:           json['age_min'] as int? ?? 18,
+      ageMax:           json['age_max'] as int? ?? 35,
+      genderPref:       json['gender_pref'] as int? ?? 0,
+      coverUrl:         json['cover_url'] as String?,
+      requireRealName:  json['require_real_name'] as bool? ?? false,
+      requireReview:    json['require_review'] as bool? ?? false,
+      allowTransfer:    json['allow_transfer'] as bool? ?? false,
       joinedCount:      json['joined_count'] as int,
       isJoined:         json['is_joined'] as bool? ?? false,
       memberAvatars:    (json['member_avatars'] as List<dynamic>? ?? []).cast<String>(),
@@ -100,6 +156,7 @@ class Gather {
       creatorAvatar:   creatorAvatar,
       title:           title,
       location:        location,
+      landmark:        landmark,
       startTime:       startTime,
       endTime:         endTime,
       firstMenuId:     firstMenuId,
@@ -109,13 +166,25 @@ class Gather {
       capacity:        capacity,
       description:     description,
       vibes:           vibes,
+      activityMode:    activityMode,
       status:          status,
       groupId:         groupId,
+      schedule:        schedule,
+      deadline:        deadline,
+      feeType:         feeType,
+      feeAmount:       feeAmount,
+      ageMin:          ageMin,
+      ageMax:          ageMax,
+      genderPref:      genderPref,
+      coverUrl:        coverUrl,
+      requireRealName: requireRealName,
+      requireReview:   requireReview,
+      allowTransfer:   allowTransfer,
       joinedCount:     joinedCount ?? this.joinedCount,
       isJoined:        isJoined ?? this.isJoined,
-      memberAvatars:    memberAvatars ?? this.memberAvatars,
-      memberUsernames:  memberUsernames ?? this.memberUsernames,
-      createdAt:        createdAt,
+      memberAvatars:   memberAvatars ?? this.memberAvatars,
+      memberUsernames: memberUsernames ?? this.memberUsernames,
+      createdAt:       createdAt,
     );
   }
 }
@@ -180,6 +249,7 @@ class CreateGatherRequest {
   const CreateGatherRequest({
     required this.title,
     this.location,
+    this.landmark,
     required this.startTime,
     required this.endTime,
     this.firstMenuId,
@@ -187,10 +257,23 @@ class CreateGatherRequest {
     required this.capacity,
     this.description,
     required this.vibes,
+    required this.activityMode,
+    this.schedule,
+    this.deadline,
+    this.feeType = 0,
+    this.feeAmount,
+    this.ageMin = 18,
+    this.ageMax = 35,
+    this.genderPref = 0,
+    this.coverUrl,
+    this.requireRealName = false,
+    this.requireReview = false,
+    this.allowTransfer = false,
   });
 
   final String title;
   final String? location;
+  final String? landmark;
   final DateTime startTime;
   final DateTime endTime;
   final int? firstMenuId;
@@ -198,16 +281,41 @@ class CreateGatherRequest {
   final int capacity;
   final String? description;
   final List<String> vibes;
+  final String activityMode;
+  final String? schedule;
+  final DateTime? deadline;
+  final int feeType;
+  final double? feeAmount;
+  final int ageMin;
+  final int ageMax;
+  final int genderPref;
+  final String? coverUrl;
+  final bool requireRealName;
+  final bool requireReview;
+  final bool allowTransfer;
 
   Map<String, dynamic> toJson() => {
-    'title':          title,
-    'location':       location,
-    'start_time':     startTime.toUtc().toIso8601String(),
-    'end_time':       endTime.toUtc().toIso8601String(),
-    'first_menu_id':  firstMenuId,
-    'second_menu_id': secondMenuId,
-    'capacity':       capacity,
-    'description':    description,
-    'vibes':          vibes,
+    'title':              title,
+    'location':           location,
+    'landmark':           landmark,
+    'start_time':         startTime.toUtc().toIso8601String(),
+    'end_time':           endTime.toUtc().toIso8601String(),
+    'first_menu_id':      firstMenuId,
+    'second_menu_id':     secondMenuId,
+    'capacity':           capacity,
+    'description':        description,
+    'vibes':              vibes,
+    'activity_mode':      activityMode,
+    'schedule':           schedule,
+    'deadline':           deadline?.toUtc().toIso8601String(),
+    'fee_type':           feeType,
+    'fee_amount':         feeAmount,
+    'age_min':            ageMin,
+    'age_max':            ageMax,
+    'gender_pref':        genderPref,
+    'cover_url':          coverUrl,
+    'require_real_name':  requireRealName,
+    'require_review':     requireReview,
+    'allow_transfer':     allowTransfer,
   };
 }

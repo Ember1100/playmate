@@ -44,6 +44,7 @@ pub async fn create_gather(
         current_user.id,
         &payload.title,
         payload.location.as_deref(),
+        payload.landmark.as_deref(),
         payload.start_time,
         payload.end_time,
         payload.first_menu_id,
@@ -51,6 +52,18 @@ pub async fn create_gather(
         payload.capacity,
         payload.description.as_deref(),
         &payload.vibes,
+        &payload.activity_mode,
+        payload.schedule.as_deref(),
+        payload.deadline,
+        payload.fee_type,
+        payload.fee_amount,
+        payload.age_min,
+        payload.age_max,
+        payload.gender_pref,
+        payload.cover_url.as_deref(),
+        payload.require_real_name,
+        payload.require_review,
+        payload.allow_transfer,
     )
     .await?;
 

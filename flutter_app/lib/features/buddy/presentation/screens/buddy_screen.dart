@@ -1313,6 +1313,13 @@ class _GatherDetailSheet extends ConsumerWidget {
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _DetailRow(
+                  icon: current.activityMode == 'online' ? Icons.videocam_outlined : Icons.place_outlined,
+                  iconColor: current.activityMode == 'online' ? const Color(0xFF2196F3) : const Color(0xFFFF7A00),
+                  label: '活动方式',
+                  value: current.activityMode == 'online' ? '线上' : '线下',
+                ),
+                const SizedBox(height: 16),
                 if (current.location != null)
                   _DetailRow(icon: Icons.location_on_outlined, iconColor: const Color(0xFFFF7A00), label: '活动地点', value: current.location!),
                 if (current.location != null) const SizedBox(height: 16),
@@ -1485,22 +1492,47 @@ class _PublishGatherSheet extends ConsumerStatefulWidget {
 }
 
 class _PublishGatherSheetState extends ConsumerState<_PublishGatherSheet> {
-  final _titleCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
-  final _customPeopleCtrl = TextEditingController();
+  // ── 步骤 ─────────────────────────────────────────────────────────────────
+  int _step = 0; // 0–3
 
+  // ── Step 1: 基本信息 ──────────────────────────────────────────────────────
+  String _activityMode = 'offline'; // offline / online / invite
   int? _firstMenuId;
   int? _secondMenuId;
+  final _titleCtrl = TextEditingController();
+  final Set<int> _vibeSet = {};
+  final _descCtrl = TextEditingController();
+
+  // ── Step 2: 时间地点 ──────────────────────────────────────────────────────
   DateTime? _startTime;
   DateTime? _endTime;
-  // 2/3/4 → 固定；-1 → 自定义（读 _customPeopleCtrl）
-  int? _peopleCount;
-  bool _customPeopleMode = false;
-  String? _location;
-  final Set<int> _vibeSet = {};
+  DateTime? _deadline;
+  final _locationCtrl = TextEditingController();
+  final _landmarkCtrl = TextEditingController();
+  final _scheduleCtrl = TextEditingController();
+
+  // ── Step 3: 参与设置 ──────────────────────────────────────────────────────
+  int _capacity = 3;
+  bool _customCapacity = false;
+  final _customCapacityCtrl = TextEditingController();
+  int _feeType = 0; // 0=免费 1=按需付费 2=AA制
+  final _feeAmountCtrl = TextEditingController();
+  int _ageMin = 18;
+  int _ageMax = 35;
+  int _genderPref = 0; // 0=不限 1=仅男 2=仅女
+  final Set<int> _reqTagSet = {};
+  bool _requireRealName = false;
+  bool _requireReview = false;
+  bool _allowTransfer = false;
+
   bool _submitting = false;
 
-  static const _vibes = ['轻松', '认真', '新手友好'];
+  // ── 常量 ──────────────────────────────────────────────────────────────────
+  static const _vibeTags   = ['户外', '探索', '文艺', '运动', '美食', '学习'];
+  static const _reqTags    = ['欢迎新手', '需有经验', '少说多做', '爱拍照', '宠物友好'];
+  static const _stepLabels = ['基本信息', '时间地点', '参与设置', '确认发布'];
+  static const _nextLabels = ['时间地点', '参与设置', '确认发布'];
+  static const _feeLabels  = ['免费参与', '按需付费', 'AA 制'];
 
   @override
   void initState() {
@@ -1512,634 +1544,1145 @@ class _PublishGatherSheetState extends ConsumerState<_PublishGatherSheet> {
   void dispose() {
     _titleCtrl.dispose();
     _descCtrl.dispose();
-    _customPeopleCtrl.dispose();
+    _locationCtrl.dispose();
+    _landmarkCtrl.dispose();
+    _scheduleCtrl.dispose();
+    _customCapacityCtrl.dispose();
+    _feeAmountCtrl.dispose();
     super.dispose();
   }
 
+  // ── 步骤校验 ──────────────────────────────────────────────────────────────
+
+  bool _validateStep() {
+    switch (_step) {
+      case 0:
+        if (_titleCtrl.text.trim().isEmpty) { _showErr('请填写搭子局标题'); return false; }
+        return true;
+      case 1:
+        if (_startTime == null || _endTime == null) { _showErr('请选择活动时间'); return false; }
+        if (!_endTime!.isAfter(_startTime!)) { _showErr('结束时间必须晚于开始时间'); return false; }
+        return true;
+      default:
+        return true;
+    }
+  }
+
+  void _showErr(String msg) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+
+  // ── 时间格式化 ────────────────────────────────────────────────────────────
+
+  String _fmtDateTime(DateTime dt) {
+    final wd = ['一','二','三','四','五','六','日'][dt.weekday - 1];
+    final mo = dt.month.toString().padLeft(2, '0');
+    final d  = dt.day.toString().padLeft(2, '0');
+    final h  = dt.hour.toString().padLeft(2, '0');
+    final m  = dt.minute.toString().padLeft(2, '0');
+    return '${dt.year}/${mo}/$d (周$wd)  $h:$m';
+  }
+
+  // ── 通用时间选择器 ────────────────────────────────────────────────────────
+
+  Future<DateTime?> _pickDT(DateTime? initial, {DateTime? firstDate}) async {
+    final now  = DateTime.now();
+    final base = firstDate ?? DateTime(now.year, now.month, now.day);
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial ?? now,
+      firstDate: base,
+      lastDate: base.add(const Duration(days: 365)),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFFFF7A00))),
+        child: child!,
+      ),
+    );
+    if (date == null || !mounted) return null;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: initial != null ? TimeOfDay.fromDateTime(initial) : const TimeOfDay(hour: 14, minute: 0),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFFFF7A00))),
+        child: child!,
+      ),
+    );
+    if (time == null || !mounted) return null;
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
+  // ── 提交 ──────────────────────────────────────────────────────────────────
+
   Future<void> _submit() async {
-    final title = _titleCtrl.text.trim();
-    if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请填写活动名称')));
-      return;
-    }
-    if (_firstMenuId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请选择活动分类')));
-      return;
-    }
-    if (_startTime == null || _endTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请选择活动时间')));
-      return;
-    }
-    if (_endTime!.isBefore(_startTime!) || _endTime!.isAtSameMomentAs(_startTime!)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('结束时间必须晚于开始时间')));
-      return;
-    }
-
-    final capacity = _customPeopleMode
-        ? (int.tryParse(_customPeopleCtrl.text) ?? 8)
-        : (_peopleCount ?? 8);
-
+    if (_submitting) return;
+    final capacity = _customCapacity
+        ? (int.tryParse(_customCapacityCtrl.text) ?? 8)
+        : _capacity;
+    final feeAmount = _feeType == 0 ? null : double.tryParse(_feeAmountCtrl.text);
+    final vibesList = [
+      ..._vibeSet.map((i) => _vibeTags[i]),
+      ..._reqTagSet.map((i) => _reqTags[i]),
+    ];
     setState(() => _submitting = true);
     try {
       final gather = await ref.read(gatherRepositoryProvider).createGather(
         CreateGatherRequest(
-          title:          title,
-          location:       _location,
-          startTime:      _startTime!,
-          endTime:        _endTime!,
-          firstMenuId:    _firstMenuId,
-          secondMenuId:   _secondMenuId,
-          capacity:       capacity,
-          description:    _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
-          vibes:          _vibeSet.map((i) => _vibes[i]).toList(),
+          title:           _titleCtrl.text.trim(),
+          location:        _locationCtrl.text.trim().isEmpty ? null : _locationCtrl.text.trim(),
+          landmark:        _landmarkCtrl.text.trim().isEmpty ? null : _landmarkCtrl.text.trim(),
+          startTime:       _startTime!,
+          endTime:         _endTime!,
+          firstMenuId:     _firstMenuId,
+          secondMenuId:    _secondMenuId,
+          capacity:        capacity,
+          description:     _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
+          vibes:           vibesList,
+          activityMode:    _activityMode,
+          schedule:        _scheduleCtrl.text.trim().isEmpty ? null : _scheduleCtrl.text.trim(),
+          deadline:        _deadline,
+          feeType:         _feeType,
+          feeAmount:       feeAmount,
+          ageMin:          _ageMin,
+          ageMax:          _ageMax,
+          genderPref:      _genderPref,
+          requireRealName: _requireRealName,
+          requireReview:   _requireReview,
+          allowTransfer:   _allowTransfer,
         ),
       );
-      // 插入到对应一级菜单的列表头部
       ref.read(gatherListProvider(_firstMenuId).notifier).prepend(gather);
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('发布失败：$e'), backgroundColor: Colors.red),
-        );
-      }
+      if (mounted) _showErr('发布失败：$e');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
 
-  // 时间格式：2026年4月17日 20:30
-  String _fmtTime(DateTime dt) {
-    final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '${dt.year}年${dt.month}月${dt.day}日 $h:$m';
-  }
-
-  Future<void> _pickLocation() async {
-    final ctrl = TextEditingController(text: _location);
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      enableDrag: false,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('输入集合地点', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 16),
-              TextField(
-                controller: ctrl,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: '如：图书馆南门、B区食堂门口',
-                  hintStyle: const TextStyle(color: Color(0xFFBBBBBB)),
-                  filled: true,
-                  fillColor: const Color(0xFFF7F7F7),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 46,
-                child: ElevatedButton(
-                  onPressed: () {
-                    setState(() => _location = ctrl.text.trim().isEmpty ? null : ctrl.text.trim());
-                    Navigator.pop(ctx);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF7A00),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(23)),
-                  ),
-                  child: const Text('确认', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pickStartTime() async {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final init = _startTime ?? now;
-    final date = await showDatePicker(
-      context: context, initialDate: init, firstDate: today,
-      lastDate: today.add(const Duration(days: 365)),
-      builder: (ctx, child) => Theme(data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFFFF7A00))), child: child!),
-    );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context, initialTime: TimeOfDay.fromDateTime(init),
-      builder: (ctx, child) => Theme(data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFFFF7A00))), child: child!),
-    );
-    if (time == null || !mounted) return;
-    final result = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-    setState(() {
-      _startTime = result;
-      if (_endTime != null && _endTime!.isBefore(result)) {
-        _endTime = result.add(const Duration(hours: 2));
-      }
-    });
-  }
-
-  Future<void> _pickEndTime() async {
-    final base = _startTime ?? DateTime.now();
-    final baseDay = DateTime(base.year, base.month, base.day);
-    final init = _endTime ?? base.add(const Duration(hours: 2));
-    final date = await showDatePicker(
-      context: context, initialDate: init, firstDate: baseDay,
-      lastDate: baseDay.add(const Duration(days: 30)),
-      builder: (ctx, child) => Theme(data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFFFF7A00))), child: child!),
-    );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context, initialTime: TimeOfDay.fromDateTime(init),
-      builder: (ctx, child) => Theme(data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: Color(0xFFFF7A00))), child: child!),
-    );
-    if (time == null || !mounted) return;
-    setState(() => _endTime = DateTime(date.year, date.month, date.day, time.hour, time.minute));
-  }
+  // ─────────────────────────────────────────────────────────────────────────
+  // build
+  // ─────────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
     return Container(
       height: MediaQuery.of(context).size.height,
-      decoration: const BoxDecoration(color: Colors.white),
+      color: const Color(0xFFF7F6F2),
       child: Column(
         children: [
-          // ── 橙色渐变头部 ──────────────────────────────────────────────────
-          _buildHeader(),
-
-          // ── 表单区 ───────────────────────────────────────────────────────
+          _buildTopBar(),
+          _buildStepBar(),
           Expanded(
             child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(16, 20, 16, MediaQuery.of(context).viewInsets.bottom + 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildTitleField(),
-                  _buildDivider(),
-                  _buildCategoryRow(),
-                  _buildDivider(),
-                  _buildLocationRow(),
-                  _buildDivider(),
-                  _buildTimeRow(),
-                  _buildDivider(),
-                  _buildPeopleRow(),
-                  _buildDivider(),
-                  _buildVibeRow(),
-                  _buildDivider(),
-                  _buildDescField(),
-                  const SizedBox(height: 32),
-                ],
-              ),
+              padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 8),
+              physics: const BouncingScrollPhysics(),
+              child: _buildStepBody(),
             ),
           ),
-
-          // ── 底部发布按钮 ─────────────────────────────────────────────────
-          Container(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: Color(0xFFF0F0F0))),
-            ),
-            child: SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF9A3C), Color(0xFFFF6B00)],
-                  ),
-                  borderRadius: BorderRadius.circular(25),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFF7A00).withValues(alpha: 0.35),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    )
-                  ],
-                ),
-                child: ElevatedButton(
-                  onPressed: _submitting ? null : _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                  ),
-                  child: _submitting
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('发布搭子局',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
-                ),
-              ),
-            ),
-          ),
+          _buildBottomBar(),
         ],
       ),
     );
   }
 
-  // ── 头部 ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // Top bar
+  // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildHeader() {
+  Widget _buildTopBar() {
     return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF2D1B69), Color(0xFF11998E)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 48, 16, 20),
+      color: Colors.white,
+      padding: EdgeInsets.fromLTRB(4, MediaQuery.of(context).padding.top + 4, 12, 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text('🎯 发起搭子局',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white, height: 1.3)),
-                SizedBox(height: 4),
-                Text('习惯相遇，就是找到人',
-                    style: TextStyle(fontSize: 13, color: Colors.white70)),
-              ],
-            ),
-          ),
           IconButton(
+            icon: const Icon(Icons.close, size: 22, color: Color(0xFF555555)),
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.close, color: Colors.white70, size: 22),
           ),
-        ],
-      ),
-    );
-  }
-
-  // ── 活动名称 ─────────────────────────────────────────────────────────────
-
-  Widget _buildTitleField() {
-    return _Section(
-      iconBg: const Color(0xFFFFF0E0),
-      icon: '📝',
-      label: '活动名称',
-      child: TextField(
-        controller: _titleCtrl,
-        style: const TextStyle(fontSize: 14, color: Color(0xFF222222)),
-        decoration: InputDecoration(
-          hintText: '今晚一起打羽毛球',
-          hintStyle: const TextStyle(fontSize: 14, color: Color(0xFFBBBBBB)),
-          filled: true,
-          fillColor: const Color(0xFFF7F7F7),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        ),
-      ),
-    );
-  }
-
-  // ── 分类（一级 + 二级菜单选择）────────────────────────────────────────────
-
-  Widget _buildCategoryRow() {
-    final menusAsync = ref.watch(menusProvider);
-    final menus = menusAsync.valueOrNull ?? [];
-    final selectedMenu = _firstMenuId == null ? null : menus.where((m) => m.id == _firstMenuId).firstOrNull;
-    final subItems = selectedMenu?.children ?? [];
-
-    return _Section(
-      iconBg: const Color(0xFFE8F5E9),
-      icon: '🎨',
-      label: '分类',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 一级菜单
-          if (menusAsync.isLoading)
-            const SizedBox(height: 32, child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF7A00))))
-          else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: menus.map((m) {
-                  final selected = m.id == _firstMenuId;
-                  return GestureDetector(
-                    onTap: () => setState(() { _firstMenuId = m.id; _secondMenuId = null; }),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: selected ? const Color(0xFFFF7A00) : const Color(0xFFF5F5F5),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        m.name,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: selected ? Colors.white : const Color(0xFF555555),
-                          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          // 二级菜单（仅一级已选时显示）
-          if (subItems.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: subItems.map((sub) {
-                  final selected = sub.id == _secondMenuId;
-                  return GestureDetector(
-                    onTap: () => setState(() => _secondMenuId = selected ? null : sub.id),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: selected ? const Color(0xFFFFEDD0) : Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: selected ? const Color(0xFFFF7A00) : const Color(0xFFEEEEEE)),
-                      ),
-                      child: Text(
-                        sub.name,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: selected ? const Color(0xFFFF7A00) : const Color(0xFF666666),
-                          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // ── 地点 ─────────────────────────────────────────────────────────────────
-
-  Widget _buildLocationRow() {
-    return _Section(
-      iconBg: const Color(0xFFFFEBEE),
-      icon: '📍',
-      label: '地点',
-      child: GestureDetector(
-        onTap: _pickLocation,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF7F7F7),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _location ?? '选择位置',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: _location != null ? const Color(0xFF333333) : const Color(0xFFBBBBBB),
-                  ),
-                ),
-              ),
-              const Icon(Icons.chevron_right, size: 18, color: Color(0xFFCCCCCC)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── 时间 ─────────────────────────────────────────────────────────────────
-
-  Widget _buildTimeRow() {
-    final hasStart = _startTime != null;
-    final hasEnd = _endTime != null;
-    return _Section(
-      iconBg: const Color(0xFFE3F2FD),
-      icon: '🕐',
-      label: '时间',
-      child: Column(
-        children: [
-          // 开始时间行
-          GestureDetector(
-            onTap: _pickStartTime,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF7F7F7),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  const Text('开始  ', style: TextStyle(fontSize: 12, color: Color(0xFF999999))),
-                  Expanded(
-                    child: Text(
-                      hasStart ? _fmtTime(_startTime!) : '选择开始时间',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: hasStart ? const Color(0xFF333333) : const Color(0xFFBBBBBB),
-                      ),
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right, size: 16, color: Color(0xFFCCCCCC)),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          // 结束时间行
-          GestureDetector(
-            onTap: _pickEndTime,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF7F7F7),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  const Text('结束  ', style: TextStyle(fontSize: 12, color: Color(0xFF999999))),
-                  Expanded(
-                    child: Text(
-                      hasEnd ? _fmtTime(_endTime!) : '选择结束时间',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: hasEnd ? const Color(0xFF333333) : const Color(0xFFBBBBBB),
-                      ),
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right, size: 16, color: Color(0xFFCCCCCC)),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── 人数 ─────────────────────────────────────────────────────────────────
-
-  Widget _buildPeopleRow() {
-    Widget pill({required String label, required bool selected, required VoidCallback onTap}) {
-      return GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          margin: const EdgeInsets.only(right: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          height: 36,
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFFFF7A00) : const Color(0xFFF5F5F5),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Center(
+          Expanded(
             child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-                color: selected ? Colors.white : const Color(0xFF555555),
-              ),
+              '发起搭子局',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF222222)),
             ),
           ),
-        ),
-      );
-    }
-
-    return _Section(
-      iconBg: const Color(0xFFF3E5F5),
-      icon: '👥',
-      label: '人数',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              ...([2, 3, 4].map((n) => pill(
-                label: '$n人',
-                selected: !_customPeopleMode && n == _peopleCount,
-                onTap: () => setState(() { _peopleCount = n; _customPeopleMode = false; }),
-              ))),
-              pill(
-                label: '自定义',
-                selected: _customPeopleMode,
-                onTap: () => setState(() { _customPeopleMode = true; _peopleCount = -1; }),
-              ),
-            ],
-          ),
-          if (_customPeopleMode) ...[
-            const SizedBox(height: 10),
-            SizedBox(
-              height: 38,
-              child: TextField(
-                controller: _customPeopleCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  hintText: '请输入人数',
-                  hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFBBBBBB)),
-                  filled: true,
-                  fillColor: const Color(0xFFF7F7F7),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  isDense: true,
-                  suffixText: '人',
-                  suffixStyle: const TextStyle(fontSize: 13, color: Color(0xFF888888)),
-                ),
-                style: const TextStyle(fontSize: 13),
-              ),
-            ),
-          ],
+          const SizedBox(width: 44), // balance the close button
         ],
       ),
     );
   }
 
-  // ── 氛围（可选）─────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // Step progress bar
+  // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildVibeRow() {
-    return _Section(
-      iconBg: const Color(0xFFFFF8E1),
-      icon: '💬',
-      label: '氛围',
-      optional: true,
+  Widget _buildStepBar() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
       child: Row(
-        children: List.generate(_vibes.length, (i) {
-          final selected = _vibeSet.contains(i);
-          return GestureDetector(
-            onTap: () => setState(() {
-              if (selected) { _vibeSet.remove(i); } else { _vibeSet.add(i); }
-            }),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: selected ? const Color(0xFFFFF0DC) : const Color(0xFFF5F5F5),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: selected ? const Color(0xFFFF7A00) : Colors.transparent,
+        children: List.generate(_stepLabels.length * 2 - 1, (i) {
+          if (i.isOdd) {
+            // connector line
+            final done = _step > i ~/ 2;
+            return Expanded(
+              child: Container(
+                height: 2,
+                color: done ? const Color(0xFFFF7A00) : const Color(0xFFE8E6E0),
+              ),
+            );
+          }
+          final idx = i ~/ 2;
+          final done = _step > idx;
+          final active = _step == idx;
+          return Column(
+            children: [
+              Container(
+                width: 28, height: 28,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: done
+                      ? const Color(0xFFFF7A00)
+                      : active
+                          ? const Color(0xFFFF7A00)
+                          : const Color(0xFFEEEEEE),
+                ),
+                child: Center(
+                  child: done
+                      ? const Icon(Icons.check, size: 14, color: Colors.white)
+                      : Text(
+                          '${idx + 1}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: active ? Colors.white : const Color(0xFFAAAAAA),
+                          ),
+                        ),
                 ),
               ),
-              child: Text(
-                _vibes[i],
+              const SizedBox(height: 4),
+              Text(
+                _stepLabels[idx],
                 style: TextStyle(
-                  fontSize: 13,
-                  color: selected ? const Color(0xFFFF7A00) : const Color(0xFF777777),
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  fontSize: 10,
+                  color: (done || active) ? const Color(0xFFFF7A00) : const Color(0xFFAAAAAA),
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
-            ),
+            ],
           );
         }),
       ),
     );
   }
 
-  // ── 说明（可选）─────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // Step body router
+  // ─────────────────────────────────────────────────────────────────────────
 
-  Widget _buildDescField() {
-    return _Section(
-      iconBg: const Color(0xFFE8EAF6),
-      icon: '✏️',
-      label: '说明',
-      optional: true,
-      child: TextField(
-        controller: _descCtrl,
-        maxLines: 3,
-        style: const TextStyle(fontSize: 14, color: Color(0xFF222222)),
-        decoration: InputDecoration(
-          hintText: '比如：新手也可以，女生优先…',
-          hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFBBBBBB)),
-          filled: true,
-          fillColor: const Color(0xFFF7F7F7),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+  Widget _buildStepBody() {
+    switch (_step) {
+      case 0: return _buildStep1();
+      case 1: return _buildStep2();
+      case 2: return _buildStep3();
+      default: return _buildStep4();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Bottom navigation bar
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildBottomBar() {
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFF0F0F0))),
+      ),
+      child: Row(
+        children: [
+          // Left button: cancel (step 0) or prev
+          if (_step == 0)
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFDDDDDD)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: const Text('取消', style: TextStyle(fontSize: 15, color: Color(0xFF888888))),
+              ),
+            )
+          else
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => setState(() => _step--),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFFF7A00)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: const Text('上一步', style: TextStyle(fontSize: 15, color: Color(0xFFFF7A00))),
+              ),
+            ),
+          const SizedBox(width: 12),
+          // Right button: next or submit
+          Expanded(
+            flex: 2,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFFFF9A3C), Color(0xFFFF6B00)]),
+                borderRadius: BorderRadius.circular(25),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFF7A00).withValues(alpha: 0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: ElevatedButton(
+                onPressed: _submitting ? null : () {
+                  if (_step < 3) {
+                    if (_validateStep()) setState(() => _step++);
+                  } else {
+                    _submit();
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: _submitting
+                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Text(
+                        _step < 3 ? '下一步：${_nextLabels[_step]}' : '发布搭子局',
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Step 1: 基本信息
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildStep1() {
+    final menusAsync = ref.watch(menusProvider);
+    final menus = menusAsync.valueOrNull ?? [];
+    final selectedMenu = _firstMenuId == null
+        ? null
+        : menus.where((m) => m.id == _firstMenuId).firstOrNull;
+    final subItems = selectedMenu?.children ?? [];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Activity type (activity mode)
+        _StepCard(
+          label: '活动类型',
+          child: Row(
+            children: [
+              _buildModeBtn(label: '线下局', icon: Icons.place_outlined, value: 'offline'),
+              const SizedBox(width: 8),
+              _buildModeBtn(label: '线上局', icon: Icons.wifi_outlined, value: 'online'),
+              const SizedBox(width: 8),
+              _buildModeBtn(label: '约人局', icon: Icons.people_outline, value: 'invite'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Title
+        _StepCard(
+          label: '活动标题 *',
+          child: TextField(
+            controller: _titleCtrl,
+            maxLength: 50,
+            style: const TextStyle(fontSize: 14, color: Color(0xFF222222)),
+            decoration: InputDecoration(
+              hintText: '例：周末一起去爬山',
+              hintStyle: const TextStyle(fontSize: 14, color: Color(0xFFBBBBBB)),
+              filled: true,
+              fillColor: const Color(0xFFF5F5F5),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              counterText: '',
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Category
+        _StepCard(
+          label: '活动分类',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (menusAsync.isLoading)
+                const SizedBox(height: 32, child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF7A00))))
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: menus.map((m) {
+                    final sel = m.id == _firstMenuId;
+                    return GestureDetector(
+                      onTap: () => setState(() { _firstMenuId = m.id; _secondMenuId = null; }),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 120),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: sel ? const Color(0xFFFF7A00) : const Color(0xFFF0F0F0),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(m.name,
+                            style: TextStyle(fontSize: 13, color: sel ? Colors.white : const Color(0xFF555555),
+                                fontWeight: sel ? FontWeight.w600 : FontWeight.w400)),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              if (subItems.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: subItems.map((sub) {
+                    final sel = sub.id == _secondMenuId;
+                    return GestureDetector(
+                      onTap: () => setState(() => _secondMenuId = sel ? null : sub.id),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 120),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: sel ? const Color(0xFFFFEDD0) : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: sel ? const Color(0xFFFF7A00) : const Color(0xFFDDDDDD)),
+                        ),
+                        child: Text(sub.name,
+                            style: TextStyle(fontSize: 12, color: sel ? const Color(0xFFFF7A00) : const Color(0xFF666666),
+                                fontWeight: sel ? FontWeight.w600 : FontWeight.w400)),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Vibes
+        _StepCard(
+          label: '氛围标签（可多选）',
+          optional: true,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: List.generate(_vibeTags.length, (i) {
+              final sel = _vibeSet.contains(i);
+              return GestureDetector(
+                onTap: () => setState(() => sel ? _vibeSet.remove(i) : _vibeSet.add(i)),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: sel ? const Color(0xFFFFF0DC) : const Color(0xFFF0F0F0),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: sel ? const Color(0xFFFF7A00) : Colors.transparent),
+                  ),
+                  child: Text(_vibeTags[i],
+                      style: TextStyle(fontSize: 13, color: sel ? const Color(0xFFFF7A00) : const Color(0xFF666666),
+                          fontWeight: sel ? FontWeight.w600 : FontWeight.w400)),
+                ),
+              );
+            }),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Description
+        _StepCard(
+          label: '活动说明',
+          optional: true,
+          child: TextField(
+            controller: _descCtrl,
+            maxLines: 4,
+            maxLength: 500,
+            style: const TextStyle(fontSize: 14, color: Color(0xFF222222)),
+            decoration: InputDecoration(
+              hintText: '介绍活动内容、注意事项、对参与者的要求…',
+              hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFBBBBBB)),
+              filled: true,
+              fillColor: const Color(0xFFF5F5F5),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              counterStyle: const TextStyle(fontSize: 11, color: Color(0xFFBBBBBB)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _buildModeBtn({required String label, required IconData icon, required String value}) {
+    final sel = _activityMode == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _activityMode = value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: sel ? const Color(0xFFFF7A00) : const Color(0xFFF0F0F0),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: sel ? const Color(0xFFFF7A00) : const Color(0xFFDDDDDD)),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, size: 20, color: sel ? Colors.white : const Color(0xFF888888)),
+              const SizedBox(height: 4),
+              Text(label, style: TextStyle(fontSize: 12, color: sel ? Colors.white : const Color(0xFF666666),
+                  fontWeight: sel ? FontWeight.w600 : FontWeight.w400)),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildDivider() =>
-      const Divider(height: 24, thickness: 0.5, color: Color(0xFFF0F0F0));
+  // ─────────────────────────────────────────────────────────────────────────
+  // Step 2: 时间地点
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildStep2() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Times
+        _StepCard(
+          label: '活动时间 *',
+          child: Column(
+            children: [
+              _buildTimePickerRow(
+                label: '开始时间',
+                value: _startTime,
+                onTap: () async {
+                  final dt = await _pickDT(_startTime);
+                  if (dt != null) setState(() => _startTime = dt);
+                },
+              ),
+              const SizedBox(height: 8),
+              _buildTimePickerRow(
+                label: '结束时间',
+                value: _endTime,
+                onTap: () async {
+                  final dt = await _pickDT(_endTime, firstDate: _startTime);
+                  if (dt != null) setState(() => _endTime = dt);
+                },
+              ),
+              const SizedBox(height: 8),
+              _buildTimePickerRow(
+                label: '报名截止',
+                value: _deadline,
+                optional: true,
+                onTap: () async {
+                  final dt = await _pickDT(_deadline);
+                  if (dt != null) setState(() => _deadline = dt);
+                },
+                onClear: _deadline != null ? () => setState(() => _deadline = null) : null,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Location (only for offline / invite)
+        if (_activityMode != 'online') ...[
+          _StepCard(
+            label: '活动地点',
+            optional: _activityMode == 'invite',
+            child: Column(
+              children: [
+                TextField(
+                  controller: _locationCtrl,
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF222222)),
+                  decoration: InputDecoration(
+                    hintText: '详细地址，例：上海市静安区XXXX',
+                    hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFBBBBBB)),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F5F5),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    prefixIcon: const Icon(Icons.place_outlined, size: 18, color: Color(0xFFFF7A00)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _landmarkCtrl,
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF222222)),
+                  decoration: InputDecoration(
+                    hintText: '标志性建筑，例：地铁1号线A口向东100m',
+                    hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFBBBBBB)),
+                    filled: true,
+                    fillColor: const Color(0xFFF5F5F5),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    prefixIcon: const Icon(Icons.near_me_outlined, size: 18, color: Color(0xFFAAAAAA)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // Schedule / itinerary
+        _StepCard(
+          label: '行程安排',
+          optional: true,
+          child: TextField(
+            controller: _scheduleCtrl,
+            maxLines: 5,
+            style: const TextStyle(fontSize: 14, color: Color(0xFF222222)),
+            decoration: InputDecoration(
+              hintText: '14:00 在地铁站集合\n14:30 出发去XX公园\n16:00 自由活动…',
+              hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFBBBBBB)),
+              filled: true,
+              fillColor: const Color(0xFFF5F5F5),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _buildTimePickerRow({
+    required String label,
+    required DateTime? value,
+    required VoidCallback onTap,
+    bool optional = false,
+    VoidCallback? onClear,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F5F5),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Text('$label${optional ? ' (可选)' : ''}  ',
+                style: const TextStyle(fontSize: 12, color: Color(0xFF999999))),
+            Expanded(
+              child: Text(
+                value != null ? _fmtDateTime(value) : '点击选择',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: value != null ? const Color(0xFF333333) : const Color(0xFFBBBBBB),
+                ),
+              ),
+            ),
+            if (value != null && onClear != null)
+              GestureDetector(
+                onTap: onClear,
+                child: const Icon(Icons.close, size: 16, color: Color(0xFFCCCCCC)),
+              )
+            else
+              const Icon(Icons.chevron_right, size: 16, color: Color(0xFFCCCCCC)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Step 3: 参与设置
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildStep3() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Capacity
+        _StepCard(
+          label: '参与人数 *',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  ...[3, 5, 8, 10].map((n) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _buildCapBtn(label: '$n人', selected: !_customCapacity && _capacity == n,
+                        onTap: () => setState(() { _capacity = n; _customCapacity = false; })),
+                  )),
+                  _buildCapBtn(label: '自定义', selected: _customCapacity,
+                      onTap: () => setState(() => _customCapacity = true)),
+                ],
+              ),
+              if (_customCapacity) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: 120,
+                  child: TextField(
+                    controller: _customCapacityCtrl,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: '2–50',
+                      hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFBBBBBB)),
+                      filled: true,
+                      fillColor: const Color(0xFFF5F5F5),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      isDense: true,
+                      suffixText: '人',
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Fee
+        _StepCard(
+          label: '费用设置',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: List.generate(_feeLabels.length, (i) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _buildCapBtn(
+                    label: _feeLabels[i],
+                    selected: _feeType == i,
+                    onTap: () => setState(() => _feeType = i),
+                  ),
+                )),
+              ),
+              if (_feeType == 1) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: 160,
+                  child: TextField(
+                    controller: _feeAmountCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: const TextStyle(fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: '金额',
+                      filled: true,
+                      fillColor: const Color(0xFFF5F5F5),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      isDense: true,
+                      prefixText: '¥  ',
+                      suffixText: '/人',
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Age range
+        _StepCard(
+          label: '年龄范围',
+          child: Row(
+            children: [
+              _buildAgeField(value: _ageMin, onChanged: (v) => setState(() => _ageMin = v)),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Text('–', style: TextStyle(fontSize: 16, color: Color(0xFF888888))),
+              ),
+              _buildAgeField(value: _ageMax, onChanged: (v) => setState(() => _ageMax = v)),
+              const SizedBox(width: 8),
+              const Text('岁', style: TextStyle(fontSize: 13, color: Color(0xFF888888))),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Gender preference
+        _StepCard(
+          label: '性别偏好',
+          child: Row(
+            children: [
+              _buildGenderBtn(label: '不限', value: 0),
+              const SizedBox(width: 8),
+              _buildGenderBtn(label: '男生优先', value: 1),
+              const SizedBox(width: 8),
+              _buildGenderBtn(label: '女生优先', value: 2),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Requirement tags
+        _StepCard(
+          label: '参与要求',
+          optional: true,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: List.generate(_reqTags.length, (i) {
+              final sel = _reqTagSet.contains(i);
+              return GestureDetector(
+                onTap: () => setState(() => sel ? _reqTagSet.remove(i) : _reqTagSet.add(i)),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: sel ? const Color(0xFFFFF0DC) : const Color(0xFFF0F0F0),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: sel ? const Color(0xFFFF7A00) : Colors.transparent),
+                  ),
+                  child: Text(_reqTags[i],
+                      style: TextStyle(fontSize: 13, color: sel ? const Color(0xFFFF7A00) : const Color(0xFF666666),
+                          fontWeight: sel ? FontWeight.w600 : FontWeight.w400)),
+                ),
+              );
+            }),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Toggles
+        _StepCard(
+          label: '高级设置',
+          optional: true,
+          child: Column(
+            children: [
+              _buildToggleRow(
+                icon: Icons.badge_outlined,
+                label: '需要实名认证',
+                sub: '参与者需完成实名',
+                value: _requireRealName,
+                onChanged: (v) => setState(() => _requireRealName = v),
+              ),
+              const Divider(height: 20, thickness: 0.5, color: Color(0xFFF0F0F0)),
+              _buildToggleRow(
+                icon: Icons.how_to_reg_outlined,
+                label: '需要审核加入',
+                sub: '你来确认每位申请者',
+                value: _requireReview,
+                onChanged: (v) => setState(() => _requireReview = v),
+              ),
+              const Divider(height: 20, thickness: 0.5, color: Color(0xFFF0F0F0)),
+              _buildToggleRow(
+                icon: Icons.swap_horiz_outlined,
+                label: '允许转让名额',
+                sub: '参与者可以把名额转给他人',
+                value: _allowTransfer,
+                onChanged: (v) => setState(() => _allowTransfer = v),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _buildCapBtn({required String label, required bool selected, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFFF7A00) : const Color(0xFFF0F0F0),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(label,
+            style: TextStyle(fontSize: 13, color: selected ? Colors.white : const Color(0xFF555555),
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400)),
+      ),
+    );
+  }
+
+  Widget _buildAgeField({required int value, required ValueChanged<int> onChanged}) {
+    return SizedBox(
+      width: 64,
+      child: TextField(
+        controller: TextEditingController(text: '$value'),
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 14),
+        onChanged: (s) {
+          final v = int.tryParse(s);
+          if (v != null && v >= 18 && v <= 35) onChanged(v);
+        },
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: const Color(0xFFF5F5F5),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          isDense: true,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGenderBtn({required String label, required int value}) {
+    final sel = _genderPref == value;
+    return GestureDetector(
+      onTap: () => setState(() => _genderPref = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: sel ? const Color(0xFFFF7A00) : const Color(0xFFF0F0F0),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(label,
+            style: TextStyle(fontSize: 13, color: sel ? Colors.white : const Color(0xFF555555),
+                fontWeight: sel ? FontWeight.w600 : FontWeight.w400)),
+      ),
+    );
+  }
+
+  Widget _buildToggleRow({
+    required IconData icon,
+    required String label,
+    required String sub,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: const Color(0xFFFF7A00)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF333333))),
+              Text(sub, style: const TextStyle(fontSize: 11, color: Color(0xFFAAAAAA))),
+            ],
+          ),
+        ),
+        Switch(
+          value: value,
+          onChanged: onChanged,
+          activeColor: const Color(0xFFFF7A00),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ],
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Step 4: 确认发布
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildStep4() {
+    final capacity = _customCapacity
+        ? (int.tryParse(_customCapacityCtrl.text) ?? _capacity)
+        : _capacity;
+    final menusAsync = ref.read(menusProvider);
+    final menus = menusAsync.valueOrNull ?? [];
+    final firstMenuName = menus.where((m) => m.id == _firstMenuId).firstOrNull?.name;
+    final subItems = menus.where((m) => m.id == _firstMenuId).firstOrNull?.children ?? [];
+    final secondMenuName = subItems.where((s) => s.id == _secondMenuId).firstOrNull?.name;
+
+    final modeLabel = const {'offline': '线下局', 'online': '线上局', 'invite': '约人局'}[_activityMode] ?? '线下局';
+    final feeLabel = _feeType == 0
+        ? '免费'
+        : _feeType == 2
+            ? 'AA 制'
+            : (_feeAmountCtrl.text.isNotEmpty ? '¥${_feeAmountCtrl.text}/人' : '按需付费');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Preview card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4)),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF7A00),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(modeLabel, style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
+                  ),
+                  if (secondMenuName != null) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFEDD0),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text('${secondMenuName}搭子',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFFFF7A00), fontWeight: FontWeight.w500)),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _titleCtrl.text.isEmpty ? '（未填写标题）' : _titleCtrl.text,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF222222)),
+              ),
+              const SizedBox(height: 12),
+              if (_startTime != null)
+                _buildPvInfoRow(Icons.schedule_outlined, _fmtDateTime(_startTime!)),
+              if (_activityMode != 'online' && _locationCtrl.text.isNotEmpty)
+                _buildPvInfoRow(Icons.place_outlined, _locationCtrl.text),
+              _buildPvInfoRow(Icons.people_outline, '$capacity 人'),
+              _buildPvInfoRow(Icons.payments_outlined, feeLabel),
+              _buildPvInfoRow(Icons.person_outline, '${_ageMin}–${_ageMax} 岁 · ${['不限', '男生优先', '女生优先'][_genderPref]}'),
+              if (firstMenuName != null)
+                _buildPvInfoRow(Icons.category_outlined, firstMenuName),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Checklist
+        _StepCard(
+          label: '发布前检查',
+          child: Column(
+            children: [
+              _buildCheckItem('活动标题已填写', _titleCtrl.text.trim().isNotEmpty),
+              _buildCheckItem('开始时间已设置', _startTime != null),
+              _buildCheckItem('结束时间已设置', _endTime != null),
+              _buildCheckItem('时间顺序正确', _startTime != null && _endTime != null && _endTime!.isAfter(_startTime!)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Notice
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF8EC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFFFE0A0)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Icon(Icons.info_outline, size: 16, color: Color(0xFFFF9A3C)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '发布后其他用户即可看到并申请参加。请确保信息准确，违规内容将被下架。',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF888888), height: 1.5),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _buildPvInfoRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: const Color(0xFFAAAAAA)),
+          const SizedBox(width: 6),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 12, color: Color(0xFF666666)))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCheckItem(String label, bool ok) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(ok ? Icons.check_circle : Icons.radio_button_unchecked,
+              size: 16, color: ok ? const Color(0xFF5DCAA5) : const Color(0xFFCCCCCC)),
+          const SizedBox(width: 8),
+          Text(label,
+              style: TextStyle(fontSize: 13, color: ok ? const Color(0xFF333333) : const Color(0xFFAAAAAA))),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 步骤卡片容器
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StepCard extends StatelessWidget {
+  const _StepCard({required this.label, required this.child, this.optional = false});
+
+  final String label;
+  final Widget child;
+  final bool optional;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(label,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF555555))),
+              if (optional) ...[
+                const SizedBox(width: 4),
+                const Text('可选', style: TextStyle(fontSize: 11, color: Color(0xFFBBBBBB))),
+              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

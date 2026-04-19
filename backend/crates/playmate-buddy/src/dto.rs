@@ -69,19 +69,43 @@ pub struct InvitationsQuery {
 #[derive(Deserialize, Validate)]
 pub struct CreateGatherRequest {
     #[validate(length(min = 1, max = 100))]
-    pub title:          String,
+    pub title:              String,
     #[validate(length(max = 200))]
-    pub location:       Option<String>,
-    pub start_time:     DateTime<Utc>,
-    pub end_time:       DateTime<Utc>,
-    pub first_menu_id:  Option<i64>,
-    pub second_menu_id: Option<i64>,
+    pub location:           Option<String>,
+    #[validate(length(max = 200))]
+    pub landmark:           Option<String>,
+    pub start_time:         DateTime<Utc>,
+    pub end_time:           DateTime<Utc>,
+    pub first_menu_id:      Option<i64>,
+    pub second_menu_id:     Option<i64>,
     #[validate(range(min = 2, max = 50))]
-    pub capacity:       i32,
+    pub capacity:           i32,
     #[validate(length(max = 1000))]
-    pub description:    Option<String>,
+    pub description:        Option<String>,
     #[serde(default)]
-    pub vibes:          Vec<String>,
+    pub vibes:              Vec<String>,
+    /// "offline"（线下）| "online"（线上）| "invite"（约人），默认线下
+    #[serde(default = "default_activity_mode")]
+    pub activity_mode:      String,
+    #[validate(length(max = 2000))]
+    pub schedule:           Option<String>,
+    pub deadline:           Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub fee_type:           i16,           // 0=免费 1=按需付费 2=AA制
+    pub fee_amount:         Option<f64>,
+    #[serde(default = "default_age_min")]
+    pub age_min:            i16,
+    #[serde(default = "default_age_max")]
+    pub age_max:            i16,
+    #[serde(default)]
+    pub gender_pref:        i16,           // 0=不限 1=仅男 2=仅女
+    pub cover_url:          Option<String>,
+    #[serde(default)]
+    pub require_real_name:  bool,
+    #[serde(default)]
+    pub require_review:     bool,
+    #[serde(default)]
+    pub allow_transfer:     bool,
 }
 
 #[derive(Deserialize)]
@@ -102,6 +126,9 @@ pub struct MenuQuery {
 }
 
 fn default_menu_type() -> i16 { 1 }
+fn default_activity_mode() -> String { "offline".to_string() }
+fn default_age_min() -> i16 { 18 }
+fn default_age_max() -> i16 { 35 }
 
 fn default_page() -> i64 { 1 }
 fn default_limit() -> i64 { 20 }
@@ -224,6 +251,7 @@ pub struct GatherResponse {
     pub creator_avatar:   Option<String>,
     pub title:            String,
     pub location:         Option<String>,
+    pub landmark:         Option<String>,
     pub start_time:       DateTime<Utc>,
     pub end_time:         DateTime<Utc>,
     pub first_menu_id:    Option<i64>,
@@ -233,13 +261,25 @@ pub struct GatherResponse {
     pub capacity:         i32,
     pub description:      Option<String>,
     pub vibes:            Vec<String>,
+    pub activity_mode:    String,
     pub status:           i16,
     pub group_id:         Option<String>,
-    pub joined_count:      i64,
-    pub is_joined:         bool,
-    pub member_avatars:    Vec<String>,
-    pub member_usernames:  Vec<String>,
-    pub created_at:        DateTime<Utc>,
+    pub schedule:         Option<String>,
+    pub deadline:         Option<DateTime<Utc>>,
+    pub fee_type:         i16,
+    pub fee_amount:       Option<f64>,
+    pub age_min:          i16,
+    pub age_max:          i16,
+    pub gender_pref:      i16,
+    pub cover_url:        Option<String>,
+    pub require_real_name: bool,
+    pub require_review:   bool,
+    pub allow_transfer:   bool,
+    pub joined_count:     i64,
+    pub is_joined:        bool,
+    pub member_avatars:   Vec<String>,
+    pub member_usernames: Vec<String>,
+    pub created_at:       DateTime<Utc>,
 }
 
 impl From<BuddyGatherWithStats> for GatherResponse {
@@ -251,6 +291,7 @@ impl From<BuddyGatherWithStats> for GatherResponse {
             creator_avatar:   g.creator_avatar,
             title:            g.title,
             location:         g.location,
+            landmark:         g.landmark,
             start_time:       g.start_time,
             end_time:         g.end_time,
             first_menu_id:    g.first_menu_id,
@@ -260,8 +301,20 @@ impl From<BuddyGatherWithStats> for GatherResponse {
             capacity:         g.capacity,
             description:      g.description,
             vibes:            g.vibes,
+            activity_mode:    g.activity_mode,
             status:           g.status,
             group_id:         g.group_id.map(|id| id.to_string()),
+            schedule:         g.schedule,
+            deadline:         g.deadline,
+            fee_type:         g.fee_type,
+            fee_amount:       g.fee_amount,
+            age_min:          g.age_min,
+            age_max:          g.age_max,
+            gender_pref:      g.gender_pref,
+            cover_url:        g.cover_url,
+            require_real_name: g.require_real_name,
+            require_review:   g.require_review,
+            allow_transfer:   g.allow_transfer,
             joined_count:     g.joined_count,
             is_joined:        g.is_joined,
             member_avatars:   g.member_avatars,
