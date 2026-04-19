@@ -18,21 +18,36 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
     );
   }
 
-  /// 乐观清零某会话的未读数（进入聊天时立即调用）
   void clearUnread(String conversationId) {
     state.whenData((list) {
       state = AsyncData(list.map((c) {
         if (c.id != conversationId) return c;
         return Conversation(
-          id: c.id,
-          otherUserId: c.otherUserId,
-          otherUsername: c.otherUsername,
-          otherAvatarUrl: c.otherAvatarUrl,
-          lastMessage: c.lastMessage,
-          lastMessageAt: c.lastMessageAt,
+          id: c.id, otherUserId: c.otherUserId,
+          otherUsername: c.otherUsername, otherAvatarUrl: c.otherAvatarUrl,
+          lastMessage: c.lastMessage, lastMessageAt: c.lastMessageAt,
           unreadCount: 0,
         );
       }).toList());
+    });
+  }
+
+  void markSelectedRead(Set<String> ids) {
+    state.whenData((list) {
+      state = AsyncData(list.map((c) => ids.contains(c.id)
+          ? Conversation(
+              id: c.id, otherUserId: c.otherUserId,
+              otherUsername: c.otherUsername, otherAvatarUrl: c.otherAvatarUrl,
+              lastMessage: c.lastMessage, lastMessageAt: c.lastMessageAt,
+              unreadCount: 0,
+            )
+          : c).toList());
+    });
+  }
+
+  void deleteSelected(Set<String> ids) {
+    state.whenData((list) {
+      state = AsyncData(list.where((c) => !ids.contains(c.id)).toList());
     });
   }
 }
@@ -100,8 +115,14 @@ class NotificationsNotifier extends AsyncNotifier<List<AppNotification>> {
         return n.id == id ? n.copyWith(isRead: true) : n;
       }).toList());
     });
-    // fire-and-forget 通知后端
     ref.read(imRepositoryProvider).markNotificationRead(id);
+  }
+
+  void markAllRead() {
+    state.whenData((list) {
+      state = AsyncData(list.map((n) => n.copyWith(isRead: true)).toList());
+    });
+    ref.read(imRepositoryProvider).markAllNotificationsRead();
   }
 }
 

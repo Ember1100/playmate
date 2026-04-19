@@ -68,6 +68,10 @@ class ImRepository {
   Future<void> markNotificationRead(String id) async {
     await _client.post<Map<String, dynamic>>('/notifications/$id/read');
   }
+
+  Future<void> markAllNotificationsRead() async {
+    await _client.post<Map<String, dynamic>>('/notifications/read-all');
+  }
 }
 
 final imRepositoryProvider = Provider<ImRepository>((ref) {

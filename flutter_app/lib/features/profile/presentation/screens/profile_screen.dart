@@ -54,7 +54,23 @@ class ProfileScreen extends ConsumerWidget {
         height: 52,
         child: Row(
           children: [
-            const SizedBox(width: 36), // 占位（无返回按钮）
+            // 返回按钮（现在 我的 以 push 方式打开）
+            GestureDetector(
+              onTap: () => context.pop(),
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.warmBg,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.arrow_back_ios_new,
+                  color: AppColors.primary,
+                  size: 18,
+                ),
+              ),
+            ),
             const Expanded(
               child: Center(
                 child: Text(
