@@ -42,7 +42,10 @@ class MatchNotifier extends Notifier<MatchState> {
   Timer? _pollTimer;
 
   @override
-  MatchState build() => const MatchState();
+  MatchState build() {
+    ref.onDispose(_stopPolling);
+    return const MatchState();
+  }
 
   MatchRepository get _repo => ref.read(matchRepositoryProvider);
 
@@ -121,11 +124,7 @@ class MatchNotifier extends Notifier<MatchState> {
     _pollTimer = null;
   }
 
-  @override
-  void dispose() {
-    _stopPolling();
-    super.dispose();
-  }
+
 }
 
 final matchProvider = NotifierProvider<MatchNotifier, MatchState>(MatchNotifier.new);
