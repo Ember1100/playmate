@@ -101,32 +101,32 @@ async fn try_match(state: &AppState) -> anyhow::Result<()> {
     career_match_repo::store_result(&mut redis, user_a.user_id, &result_for_a).await?;
     career_match_repo::store_result(&mut redis, user_b.user_id, &result_for_b).await?;
 
-    // WebSocket 实时推送
+    // WebSocket 实时推送（统一从 result_for_* 取字段，避免裸变量 move 后失效）
     let msg_a = json!({
         "type":               "career_match_found",
-        "matched_user_id":    user_b.user_id.to_string(),
-        "username":           user_b.username,
-        "avatar_url":         user_b.avatar_url,
-        "career_role":        user_b.career_role,
-        "company":            user_b.company,
-        "experience":         user_b.experience,
-        "score":              score,
-        "common_skills":      common_skills,
-        "common_skill_count": common_skills.len(),
-        "common_goal_count":  common_goal_count,
-        "collab_suggestions": collab_suggestions,
+        "matched_user_id":    result_for_a.matched_user_id.to_string(),
+        "username":           result_for_a.username,
+        "avatar_url":         result_for_a.avatar_url,
+        "career_role":        result_for_a.career_role,
+        "company":            result_for_a.company,
+        "experience":         result_for_a.experience,
+        "score":              result_for_a.score,
+        "common_skills":      result_for_a.common_skills,
+        "common_skill_count": result_for_a.common_skill_count,
+        "common_goal_count":  result_for_a.common_goal_count,
+        "collab_suggestions": result_for_a.collab_suggestions,
     })
     .to_string();
 
     let msg_b = json!({
         "type":               "career_match_found",
-        "matched_user_id":    user_a.user_id.to_string(),
-        "username":           user_a.username,
-        "avatar_url":         user_a.avatar_url,
-        "career_role":        user_a.career_role,
-        "company":            user_a.company,
-        "experience":         user_a.experience,
-        "score":              score,
+        "matched_user_id":    result_for_b.matched_user_id.to_string(),
+        "username":           result_for_b.username,
+        "avatar_url":         result_for_b.avatar_url,
+        "career_role":        result_for_b.career_role,
+        "company":            result_for_b.company,
+        "experience":         result_for_b.experience,
+        "score":              result_for_b.score,
         "common_skills":      result_for_b.common_skills,
         "common_skill_count": result_for_b.common_skill_count,
         "common_goal_count":  result_for_b.common_goal_count,
