@@ -620,8 +620,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Widget _buildSectionTitle(String title) {
     return Row(
       children: [
-        Container(width: 3, height: 16, color: AppColors.primary,
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(2))),
+        Container(
+          width: 3, height: 16,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
         const SizedBox(width: 8),
         Text(
           title,
