@@ -7,10 +7,15 @@ use axum::{
 
 use playmate_common::AppState;
 
-use crate::handler::{buddy, career, gather, invitation, menu, search};
+use crate::handler::{buddy, career, gather, invitation, match_handler, menu, search};
 
 pub fn buddy_routes() -> Router<AppState> {
     Router::new()
+        // 线上快速匹配
+        .route("/match/join",    post(match_handler::join_match))
+        .route("/match/leave",   axum::routing::delete(match_handler::leave_match))
+        .route("/match/result",  get(match_handler::get_match_result))
+        .route("/match/next",    post(match_handler::next_match))
         // 搭子推荐与请求
         .route("/candidates",              get(buddy::list_candidates))
         .route("/request",                 post(buddy::send_request))

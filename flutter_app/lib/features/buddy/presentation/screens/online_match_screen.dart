@@ -1,37 +1,44 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../shared/widgets/pm_swipe_back.dart';
+import '../../../../features/im/data/websocket_service.dart';
+import '../../../../features/im/data/im_repository.dart';
+import '../../data/match_repository.dart';
+import '../../providers/match_provider.dart';
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  线上搭子 · 快速匹配（3页流程）
 // ═════════════════════════════════════════════════════════════════════════════
 
-class OnlineMatchScreen extends StatefulWidget {
+class OnlineMatchScreen extends ConsumerStatefulWidget {
   const OnlineMatchScreen({super.key});
 
   @override
-  State<OnlineMatchScreen> createState() => _OnlineMatchScreenState();
+  ConsumerState<OnlineMatchScreen> createState() => _OnlineMatchScreenState();
 }
 
-class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
+class _OnlineMatchScreenState extends ConsumerState<OnlineMatchScreen> {
   int _page = 0; // 0=设置 1=匹配中 2=匹配结果
 
   // ── 设置页状态 ─────────────────────────────────────────────────────────────
   final Set<int> _selectedActivities = {0};
-  int _selectedMood    = 0;
-  int _selectedGender  = 0;
+  int _selectedMood   = 0;
+  int _selectedGender = 0;
 
-  // ── 匹配页状态 ─────────────────────────────────────────────────────────────
-  double _sweepAngle   = 0;
-  int    _foundCount   = 0;
+  // ── 匹配页动画状态 ─────────────────────────────────────────────────────────
+  double _sweepAngle = 0;
+  int    _foundCount = 0;
   final  List<_FoundDot> _foundDots = [];
-  String _statusText   = '扫描附近在线用户...';
+  String _statusText = '扫描附近在线用户...';
   Timer? _sweepTimer;
-  Timer? _matchTimer;
 
   // ── 结果页状态 ─────────────────────────────────────────────────────────────
   double _matchBarTarget = 0;
+
+  // ── WS 订阅 ────────────────────────────────────────────────────────────────
+  StreamSubscription<Map<String, dynamic>>? _wsSub;
 
   // ── 静态数据 ───────────────────────────────────────────────────────────────
   static const _activities = ['游戏', '追剧', '学习', '聊天', '读书', '音乐', '健身打卡'];
@@ -53,9 +60,36 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
 
   // ── 逻辑 ───────────────────────────────────────────────────────────────────
 
+  @override
+  void initState() {
+    super.initState();
+    _listenWs();
+  }
+
+  void _listenWs() {
+    final wsService = ref.read(wsServiceProvider);
+    _wsSub = wsService.messages.listen((msg) {
+      if (msg['type'] == 'match_found') {
+        final result = MatchResult(
+          matched:          true,
+          matchedUserId:    msg['matched_user_id'] as String?,
+          username:         msg['username'] as String?,
+          avatarUrl:        msg['avatar_url'] as String?,
+          commonInterests:  (msg['common_interests'] as List<dynamic>?)
+                                ?.map((e) => e as String)
+                                .toList(),
+          score:            (msg['score'] as num?)?.toInt(),
+        );
+        ref.read(matchProvider.notifier).onMatchFound(result);
+      }
+    });
+  }
+
+  List<String> get _selectedActivityNames =>
+      _selectedActivities.map((i) => _activities[i]).toList();
+
   void _startMatch() {
     _sweepTimer?.cancel();
-    _matchTimer?.cancel();
     setState(() {
       _page       = 1;
       _sweepAngle = 0;
@@ -63,7 +97,16 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
       _foundDots.clear();
       _statusText = '扫描附近在线用户...';
     });
+    _startRadarAnimation();
 
+    ref.read(matchProvider.notifier).join(
+      activities: _selectedActivityNames,
+      mood:       _selectedMood,
+      genderPref: _selectedGender,
+    );
+  }
+
+  void _startRadarAnimation() {
     _sweepTimer = Timer.periodic(const Duration(milliseconds: 30), (_) {
       if (!mounted) return;
       setState(() {
@@ -80,31 +123,40 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
         }
       });
     });
-
-    _matchTimer = Timer(const Duration(milliseconds: 5200), () {
-      _sweepTimer?.cancel();
-      if (!mounted) return;
-      setState(() => _statusText = '匹配成功！');
-      Future.delayed(const Duration(milliseconds: 600), () {
-        if (!mounted) return;
-        setState(() { _page = 2; _matchBarTarget = 0; });
-        Future.delayed(const Duration(milliseconds: 300), () {
-          if (mounted) setState(() => _matchBarTarget = 0.92);
-        });
-      });
-    });
   }
 
-  void _goToSetup() {
+  void _cancelMatch() {
     _sweepTimer?.cancel();
-    _matchTimer?.cancel();
+    ref.read(matchProvider.notifier).leave();
     if (mounted) setState(() => _page = 0);
+  }
+
+  void _nextMatch() {
+    setState(() {
+      _page       = 1;
+      _sweepAngle = 0;
+      _foundCount = 0;
+      _foundDots.clear();
+      _statusText = '扫描附近在线用户...';
+    });
+    _startRadarAnimation();
+    ref.read(matchProvider.notifier).next();
+  }
+
+  Future<void> _sayHi(MatchResult result) async {
+    if (result.matchedUserId == null) return;
+    try {
+      final imRepo = ref.read(imRepositoryProvider);
+      final convId = await imRepo.createConversation(result.matchedUserId!);
+      if (!mounted) return;
+      Navigator.pushNamed(context, '/im/chat/$convId');
+    } catch (_) {}
   }
 
   @override
   void dispose() {
     _sweepTimer?.cancel();
-    _matchTimer?.cancel();
+    _wsSub?.cancel();
     super.dispose();
   }
 
@@ -112,6 +164,19 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final matchState = ref.watch(matchProvider);
+
+    // 当 provider 变为 matched 状态时切换到结果页
+    ref.listen<MatchState>(matchProvider, (prev, next) {
+      if (next.status == MatchStatus.matched && _page != 2) {
+        _sweepTimer?.cancel();
+        setState(() { _page = 2; _matchBarTarget = 0; });
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) setState(() => _matchBarTarget = (next.result?.score ?? 92) / 100.0);
+        });
+      }
+    });
+
     return PmSwipeBack(
       child: Scaffold(
         backgroundColor: const Color(0xFFFDF9F6),
@@ -126,23 +191,30 @@ class _OnlineMatchScreenState extends State<OnlineMatchScreen> {
               onActivityTap:      (i) => setState(() {
                 if (_selectedActivities.contains(i)) { _selectedActivities.remove(i); } else { _selectedActivities.add(i); }
               }),
-              onMoodTap:      (i) => setState(() => _selectedMood   = i),
-              onGenderTap:    (i) => setState(() => _selectedGender = i),
-              onStart:        _startMatch,
+              onMoodTap:   (i) => setState(() => _selectedMood   = i),
+              onGenderTap: (i) => setState(() => _selectedGender = i),
+              onStart:     _startMatch,
             ),
           1 => _MatchingPage(
               sweepAngle: _sweepAngle,
               foundDots:  _foundDots,
               foundCount: _foundCount,
               statusText: _statusText,
-              onCancel:   _goToSetup,
+              onCancel:   _cancelMatch,
             ),
           _ => _MatchedPage(
               matchBarTarget: _matchBarTarget,
-              onSayHi:  () {},
-              onProfile: () {},
-              onNext:   _startMatch,
-              onHome:   _goToSetup,
+              result:         matchState.result,
+              onSayHi:  () { if (matchState.result != null) _sayHi(matchState.result!); },
+              onProfile: () {
+                final uid = matchState.result?.matchedUserId;
+                if (uid != null) Navigator.pushNamed(context, '/profile/$uid');
+              },
+              onNext:   _nextMatch,
+              onHome:   () {
+                ref.read(matchProvider.notifier).reset();
+                setState(() => _page = 0);
+              },
             ),
         },
       ),
@@ -335,7 +407,7 @@ class _MatchingPage extends StatelessWidget {
             const Text('正在为你匹配搭子',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Color(0xFF2C2C2A))),
             const SizedBox(height: 6),
-            const Text('根据兴趣 · 在线状态 · 距离匹配',
+            const Text('根据兴趣 · 在线状态 · 心情匹配',
                 style: TextStyle(fontSize: 13, color: Color(0xFF888780))),
             const SizedBox(height: 32),
 
@@ -403,6 +475,7 @@ class _MatchingPage extends StatelessWidget {
 class _MatchedPage extends StatelessWidget {
   const _MatchedPage({
     required this.matchBarTarget,
+    required this.result,
     required this.onSayHi,
     required this.onProfile,
     required this.onNext,
@@ -410,6 +483,7 @@ class _MatchedPage extends StatelessWidget {
   });
 
   final double matchBarTarget;
+  final MatchResult? result;
   final VoidCallback onSayHi;
   final VoidCallback onProfile;
   final VoidCallback onNext;
@@ -417,7 +491,11 @@ class _MatchedPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final top = MediaQuery.of(context).padding.top;
+    final top    = MediaQuery.of(context).padding.top;
+    final name   = result?.username ?? '搭子';
+    final score  = result?.score ?? 0;
+    final interests = result?.commonInterests ?? [];
+
     return Column(
       children: [
         // ── 橙色头部 ─────────────────────────────────────────────────────────
@@ -452,8 +530,12 @@ class _MatchedPage extends StatelessWidget {
                   const Text('找到搭子啦！',
                       style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: Colors.white)),
                   const SizedBox(height: 4),
-                  const Text('契合度 92% · 共同兴趣 3 个',
-                      style: TextStyle(fontSize: 13, color: Colors.white70)),
+                  Text(
+                    interests.isEmpty
+                        ? '契合度 $score%'
+                        : '契合度 $score% · 共同兴趣 ${interests.length} 个',
+                    style: const TextStyle(fontSize: 13, color: Colors.white70),
+                  ),
                 ],
               ),
             ],
@@ -492,8 +574,8 @@ class _MatchedPage extends StatelessWidget {
                               children: [
                                 Row(
                                   children: [
-                                    const Text('小欢',
-                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Color(0xFF2C2C2A))),
+                                    Text(name,
+                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Color(0xFF2C2C2A))),
                                     const SizedBox(width: 8),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -514,9 +596,13 @@ class _MatchedPage extends StatelessWidget {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 2),
-                                const Text('21岁 · 上海 · 喜欢游戏和追剧',
-                                    style: TextStyle(fontSize: 12, color: Color(0xFF888780))),
+                                if (result?.bio != null) ...[
+                                  const SizedBox(height: 2),
+                                  Text(result!.bio!,
+                                      style: const TextStyle(fontSize: 12, color: Color(0xFF888780)),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
+                                ],
                               ],
                             ),
                           ),
@@ -559,28 +645,30 @@ class _MatchedPage extends StatelessWidget {
                               }),
                             ),
                             const SizedBox(width: 10),
-                            const Text('92%',
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF854F0B))),
+                            Text('$score%',
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF854F0B))),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 10),
 
-                      const Text('共同兴趣',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF888780))),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        children: ['游戏', '追剧', '聊天'].map((t) => Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF7ED),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFFF8C42).withValues(alpha: 0.25), width: 0.5),
-                          ),
-                          child: Text(t, style: const TextStyle(fontSize: 12, color: Color(0xFF854F0B))),
-                        )).toList(),
-                      ),
+                      if (interests.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        const Text('共同兴趣',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF888780))),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          children: interests.map((t) => Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF7ED),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFFF8C42).withValues(alpha: 0.25), width: 0.5),
+                            ),
+                            child: Text(t, style: const TextStyle(fontSize: 12, color: Color(0xFF854F0B))),
+                          )).toList(),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -652,7 +740,6 @@ class _RadarPainter extends CustomPainter {
     final cy = size.height / 2;
     final center = Offset(cx, cy);
 
-    // 同心环
     void ring(double r, double opacity) {
       canvas.drawCircle(center, r, Paint()
         ..color = const Color(0xFFFF8C42).withValues(alpha: opacity)
@@ -666,11 +753,7 @@ class _RadarPainter extends CustomPainter {
     ring(65, 0.08);
     ring(35, 0.06);
 
-    // 扫描扇形
-    // HTML坐标系：角度从12点顺时针，x=cx+r*sin(a), y=cy-r*cos(a)
-    // Flutter arcTo：角度从3点顺时针
-    // 转换：flutterAngle = htmlAngle - 90°
-    const sweepSpan = 30.0; // 度
+    const sweepSpan = 30.0;
     final startRad = (sweepAngle - sweepSpan) * pi / 180 - pi / 2;
     final sweepRad = sweepSpan * pi / 180;
 
@@ -681,7 +764,6 @@ class _RadarPainter extends CustomPainter {
       ..close();
     canvas.drawPath(sweepPath, Paint()..color = const Color(0xFFFF8C42).withValues(alpha: 0.10));
 
-    // 已发现的搭子点
     for (final dot in foundDots) {
       final dc = Offset(dot.x, dot.y);
       canvas.drawCircle(dc, 9, Paint()
@@ -691,7 +773,6 @@ class _RadarPainter extends CustomPainter {
       canvas.drawCircle(dc, 6, Paint()..color = dot.color.withValues(alpha: 0.9));
     }
 
-    // 中心"我"
     canvas.drawCircle(center, 12, Paint()..color = const Color(0xFFFF8C42));
     final tp = TextPainter(
       text: const TextSpan(

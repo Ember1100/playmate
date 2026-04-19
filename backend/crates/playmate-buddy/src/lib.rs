@@ -9,6 +9,7 @@
 mod dto;
 mod handler;
 mod model;
+pub mod match_worker;
 mod repo;
 pub mod routes;
 

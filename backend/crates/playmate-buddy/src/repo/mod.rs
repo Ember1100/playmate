@@ -4,5 +4,6 @@ pub mod buddy_repo;
 pub mod career_repo;
 pub mod gather_repo;
 pub mod invitation_repo;
+pub mod match_repo;
 pub mod menu_repo;
 pub mod search_repo;
