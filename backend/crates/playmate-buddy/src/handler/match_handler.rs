@@ -10,10 +10,11 @@ use axum::{extract::State, response::IntoResponse, Json};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use uuid::Uuid;
 
 use playmate_common::{error::AppError, response::ApiResponse, AppState, CurrentUser};
 
-use crate::repo::match_repo::{self, MatchResult, QueueEntry};
+use crate::repo::match_repo::{self, QueueEntry};
 
 // ── Request ───────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,72 @@ pub struct MatchResultResponse {
     pub score:            Option<i32>,
 }
 
+// ── 内部辅助 ──────────────────────────────────────────────────────────────────
+
+struct UserRow {
+    username:   String,
+    avatar_url: Option<String>,
+    gender:     i16,
+    bio:        Option<String>,
+}
+
+async fn fetch_user_row(
+    db: &sqlx::PgPool,
+    user_id: Uuid,
+    with_bio: bool,
+) -> Result<UserRow, AppError> {
+    if with_bio {
+        let row = sqlx::query(
+            "SELECT username, avatar_url, gender, bio FROM users WHERE id = $1",
+        )
+        .bind(user_id)
+        .fetch_one(db)
+        .await
+        .map_err(AppError::Database)?;
+
+        use sqlx::Row;
+        Ok(UserRow {
+            username:   row.try_get("username").map_err(AppError::Database)?,
+            avatar_url: row.try_get("avatar_url").map_err(AppError::Database)?,
+            gender:     row.try_get("gender").map_err(AppError::Database)?,
+            bio:        row.try_get("bio").map_err(AppError::Database)?,
+        })
+    } else {
+        let row = sqlx::query(
+            "SELECT username, avatar_url, gender FROM users WHERE id = $1",
+        )
+        .bind(user_id)
+        .fetch_one(db)
+        .await
+        .map_err(AppError::Database)?;
+
+        use sqlx::Row;
+        Ok(UserRow {
+            username:   row.try_get("username").map_err(AppError::Database)?,
+            avatar_url: row.try_get("avatar_url").map_err(AppError::Database)?,
+            gender:     row.try_get("gender").map_err(AppError::Database)?,
+            bio:        None,
+        })
+    }
+}
+
+async fn fetch_user_tags(db: &sqlx::PgPool, user_id: Uuid) -> Result<Vec<String>, AppError> {
+    use sqlx::Row;
+    let rows = sqlx::query(
+        "SELECT t.name FROM tags t
+         JOIN user_tags ut ON ut.tag_id = t.id
+         WHERE ut.user_id = $1",
+    )
+    .bind(user_id)
+    .fetch_all(db)
+    .await
+    .map_err(AppError::Database)?;
+
+    rows.iter()
+        .map(|r| r.try_get::<String, _>("name").map_err(AppError::Database))
+        .collect()
+}
+
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
 /// 加入匹配队列
@@ -48,25 +115,8 @@ pub async fn join_match(
     current_user:  CurrentUser,
     Json(payload): Json<JoinMatchRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    // 查询用户基本信息（用于匹配时展示）
-    let row = sqlx::query!(
-        "SELECT username, avatar_url, gender, bio FROM users WHERE id = $1",
-        current_user.id
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(AppError::Database)?;
-
-    // 查询用户兴趣标签
-    let tags: Vec<String> = sqlx::query_scalar!(
-        "SELECT t.name FROM tags t
-         JOIN user_tags ut ON ut.tag_id = t.id
-         WHERE ut.user_id = $1",
-        current_user.id
-    )
-    .fetch_all(&state.db)
-    .await
-    .map_err(AppError::Database)?;
+    let row  = fetch_user_row(&state.db, current_user.id, true).await?;
+    let tags = fetch_user_tags(&state.db, current_user.id).await?;
 
     let entry = QueueEntry {
         user_id:     current_user.id,
@@ -103,10 +153,6 @@ pub async fn get_match_result(
 ) -> Result<impl IntoResponse, AppError> {
     let mut redis = state.redis.clone();
 
-    // 先看是否还在等待队列（保留字段供未来使用）
-    let _waiting = match_repo::is_waiting(&mut redis, current_user.id).await?;
-
-    // 查结果
     if let Some(result) = match_repo::pop_result(&mut redis, current_user.id).await? {
         return Ok(ApiResponse::ok(MatchResultResponse {
             matched:          true,
@@ -136,24 +182,8 @@ pub async fn next_match(
     current_user:  CurrentUser,
     Json(payload): Json<JoinMatchRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    // 复用 join_match 逻辑
-    let row = sqlx::query!(
-        "SELECT username, avatar_url, gender FROM users WHERE id = $1",
-        current_user.id
-    )
-    .fetch_one(&state.db)
-    .await
-    .map_err(AppError::Database)?;
-
-    let tags: Vec<String> = sqlx::query_scalar!(
-        "SELECT t.name FROM tags t
-         JOIN user_tags ut ON ut.tag_id = t.id
-         WHERE ut.user_id = $1",
-        current_user.id
-    )
-    .fetch_all(&state.db)
-    .await
-    .map_err(AppError::Database)?;
+    let row  = fetch_user_row(&state.db, current_user.id, false).await?;
+    let tags = fetch_user_tags(&state.db, current_user.id).await?;
 
     let entry = QueueEntry {
         user_id:     current_user.id,
