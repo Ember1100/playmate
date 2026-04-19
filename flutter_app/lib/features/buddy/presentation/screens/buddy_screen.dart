@@ -1271,10 +1271,13 @@ class _GatherDetailSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final topPad = MediaQuery.of(context).padding.top;
-    final color = item.themeColor;
-    // 从 provider 取最新状态（参加/退出后乐观更新）
-    final gathers = ref.watch(gatherListProvider(firstMenuId)).valueOrNull;
-    final current = gathers?.firstWhere((g) => g.id == item.id, orElse: () => item) ?? item;
+    // 优先用服务端最新数据；加载中 / 失败时回退到列表缓存或传入 item
+    final detailAsync = ref.watch(gatherDetailProvider(item.id));
+    final listGathers = ref.watch(gatherListProvider(firstMenuId)).valueOrNull;
+    final current = detailAsync.valueOrNull
+        ?? listGathers?.firstWhere((g) => g.id == item.id, orElse: () => item)
+        ?? item;
+    final color = current.themeColor;
     return Container(
       height: MediaQuery.of(context).size.height,
       decoration: const BoxDecoration(color: Colors.white),

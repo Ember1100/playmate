@@ -39,6 +39,7 @@ class GatherListNotifier extends FamilyAsyncNotifier<List<Gather>, int?> {
         reverted[i] = newGather;
         state = AsyncData(reverted);
       }
+      ref.invalidate(gatherDetailProvider(gatherId));
     } catch (e) {
       final reverted = List<Gather>.from(state.valueOrNull ?? []);
       final i = reverted.indexWhere((g) => g.id == gatherId);
@@ -72,6 +73,7 @@ class GatherListNotifier extends FamilyAsyncNotifier<List<Gather>, int?> {
         reverted[i] = newGather;
         state = AsyncData(reverted);
       }
+      ref.invalidate(gatherDetailProvider(gatherId));
     } catch (e) {
       final reverted = List<Gather>.from(state.valueOrNull ?? []);
       final i = reverted.indexWhere((g) => g.id == gatherId);
@@ -94,3 +96,9 @@ final gatherListProvider =
     AsyncNotifierProviderFamily<GatherListNotifier, List<Gather>, int?>(
   GatherListNotifier.new,
 );
+
+// ── 搭子局详情（打开详情页时拉最新数据）────────────────────────────────────────
+
+final gatherDetailProvider = FutureProviderFamily<Gather, String>((ref, id) {
+  return ref.read(gatherRepositoryProvider).getGather(id);
+});
