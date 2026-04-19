@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../shared/widgets/pm_swipe_back.dart';
 import '../../../../features/im/data/websocket_service.dart';
 import '../../../../features/im/data/im_repository.dart';
@@ -149,7 +150,10 @@ class _OnlineMatchScreenState extends ConsumerState<OnlineMatchScreen> {
       final imRepo = ref.read(imRepositoryProvider);
       final convId = await imRepo.createConversation(result.matchedUserId!);
       if (!mounted) return;
-      Navigator.pushNamed(context, '/im/chat/$convId');
+      context.push('/im/chat/$convId', extra: {
+        'username':      result.username ?? '搭子',
+        'otherAvatarUrl': result.avatarUrl,
+      });
     } catch (_) {}
   }
 
@@ -177,24 +181,40 @@ class _OnlineMatchScreenState extends ConsumerState<OnlineMatchScreen> {
       }
     });
 
-    return PmSwipeBack(
+    return PopScope(
+      // page 0：允许系统返回（go_router 正常 pop 回搭子页）
+      // page 1/2：拦截系统返回，在应用层处理，防止直接退出 app
+      canPop: _page == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return; // page 0 已由框架处理
+        if (_page == 1) {
+          _cancelMatch(); // 取消匹配并回到 page 0
+        } else {
+          ref.read(matchProvider.notifier).reset();
+          setState(() => _page = 0);
+        }
+      },
       child: Scaffold(
         backgroundColor: const Color(0xFFFDF9F6),
         body: switch (_page) {
-          0 => _SetupPage(
-              selectedActivities: _selectedActivities,
-              selectedMood:       _selectedMood,
-              selectedGender:     _selectedGender,
-              activities:         _activities,
-              moods:              _moods,
-              genders:            _genders,
-              onActivityTap:      (i) => setState(() {
-                if (_selectedActivities.contains(i)) { _selectedActivities.remove(i); } else { _selectedActivities.add(i); }
-              }),
-              onMoodTap:   (i) => setState(() => _selectedMood   = i),
-              onGenderTap: (i) => setState(() => _selectedGender = i),
-              onStart:     _startMatch,
+          // page 0 保留 PmSwipeBack 支持右滑返回
+          0 => PmSwipeBack(
+              child: _SetupPage(
+                selectedActivities: _selectedActivities,
+                selectedMood:       _selectedMood,
+                selectedGender:     _selectedGender,
+                activities:         _activities,
+                moods:              _moods,
+                genders:            _genders,
+                onActivityTap:      (i) => setState(() {
+                  if (_selectedActivities.contains(i)) { _selectedActivities.remove(i); } else { _selectedActivities.add(i); }
+                }),
+                onMoodTap:   (i) => setState(() => _selectedMood   = i),
+                onGenderTap: (i) => setState(() => _selectedGender = i),
+                onStart:     _startMatch,
+              ),
             ),
+          // page 1/2：不加 PmSwipeBack，系统返回由 PopScope 拦截
           1 => _MatchingPage(
               sweepAngle: _sweepAngle,
               foundDots:  _foundDots,
@@ -208,7 +228,12 @@ class _OnlineMatchScreenState extends ConsumerState<OnlineMatchScreen> {
               onSayHi:  () { if (matchState.result != null) _sayHi(matchState.result!); },
               onProfile: () {
                 final uid = matchState.result?.matchedUserId;
-                if (uid != null) Navigator.pushNamed(context, '/profile/$uid');
+                if (uid != null) {
+                  context.push('/buddy/user/$uid', extra: {
+                    'username':  matchState.result?.username,
+                    'avatarUrl': matchState.result?.avatarUrl,
+                  });
+                }
               },
               onNext:   _nextMatch,
               onHome:   () {

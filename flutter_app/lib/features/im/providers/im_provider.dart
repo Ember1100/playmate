@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/api/api_client.dart';
 import '../data/im_model.dart';
 import '../data/im_repository.dart';
+import '../data/websocket_service.dart';
 
 // Conversations list
 class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
@@ -144,6 +146,52 @@ final groupChatProvider =
     AsyncNotifierProviderFamily<GroupChatNotifier, List<GroupMessage>, String>(
   GroupChatNotifier.new,
 );
+
+// ── 全局 WS 连接 + 消息分发器 ─────────────────────────────────────────────────────
+//
+// 在 PmBottomNav 中 watch，确保用户登录后立即建立 WS 连接并实时刷新未读数。
+// WebSocketService 内部有防重连守卫，多次 connect 调用相同 token 不会重建连接。
+
+final wsHandlerProvider = Provider<void>((ref) {
+  final wsService    = ref.read(wsServiceProvider);
+  final tokenStorage = ref.read(tokenStorageProvider);
+
+  // 异步连接（fire-and-forget；WebSocketService 内部防重连）
+  tokenStorage.getAccessToken().then((token) {
+    if (token != null) wsService.connect(token);
+  });
+
+  // 监听消息，实时更新各 provider 以驱动角标重绘
+  final sub = wsService.messages.listen((data) {
+    switch (data['type'] as String?) {
+      case 'new_message':
+        ref.read(conversationsProvider.notifier).refresh();
+      case 'new_group_message':
+        ref.read(groupSessionsProvider.notifier).refresh();
+      case 'new_notification':
+        ref.read(notificationsProvider.notifier).refresh();
+    }
+  });
+
+  ref.onDispose(sub.cancel);
+});
+
+// ── Total unread count (for bottom nav badge) ─────────────────────────────────
+
+/// 汇总所有未读数：DM + 群聊 + 通知
+final totalUnreadCountProvider = Provider<int>((ref) {
+  final dmUnread = ref.watch(conversationsProvider).valueOrNull
+          ?.fold(0, (sum, c) => sum + c.unreadCount) ??
+      0;
+  final groupUnread = ref.watch(groupSessionsProvider).valueOrNull
+          ?.fold(0, (sum, g) => sum + g.unreadCount) ??
+      0;
+  final notifUnread = ref.watch(notificationsProvider).valueOrNull
+          ?.where((n) => !n.isRead)
+          .length ??
+      0;
+  return dmUnread + groupUnread + notifUnread;
+});
 
 // ── Messages list (read-only) ─────────────────────────────────────────────────
 

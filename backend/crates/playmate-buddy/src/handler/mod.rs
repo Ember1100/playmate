@@ -2,6 +2,7 @@
 
 pub mod buddy;
 pub mod career;
+pub mod career_match_handler;
 pub mod gather;
 pub mod invitation;
 pub mod match_handler;

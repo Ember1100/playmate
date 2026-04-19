@@ -7,7 +7,7 @@ use axum::{
 
 use playmate_common::AppState;
 
-use crate::handler::{buddy, career, gather, invitation, match_handler, menu, search};
+use crate::handler::{buddy, career, career_match_handler, gather, invitation, match_handler, menu, search};
 
 pub fn buddy_routes() -> Router<AppState> {
     Router::new()
@@ -26,9 +26,14 @@ pub fn buddy_routes() -> Router<AppState> {
         .route("/invitations/sent",        get(invitation::list_sent))
         .route("/invitations/received",    get(invitation::list_received))
         .route("/invitations/:id/respond", put(invitation::respond_invitation))
+        // 职业搭子快速匹配
+        .route("/career/match/join",    post(career_match_handler::join_career_match))
+        .route("/career/match/leave",   axum::routing::delete(career_match_handler::leave_career_match))
+        .route("/career/match/result",  get(career_match_handler::get_career_match_result))
+        .route("/career/match/next",    post(career_match_handler::next_career_match))
         // 职业搭子阵地
-        .route("/career",                  get(career::list_career))
-        .route("/career/:user_id",         get(career::get_career))
+        .route("/career",               get(career::list_career))
+        .route("/career/:user_id",      get(career::get_career))
         // 搜索
         .route("/search",                  get(search::search_buddy))
         // 菜单

@@ -135,6 +135,7 @@ async fn main() -> anyhow::Result<()> {
 
     // ── 后台 Worker ───────────────────────────────────────────────────────
     tokio::spawn(playmate_buddy::match_worker::run(state.clone()));
+    tokio::spawn(playmate_buddy::career_worker::run(state.clone()));
 
     // ── CORS ──────────────────────────────────────────────────────────────
     let cors = CorsLayer::new()

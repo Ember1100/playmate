@@ -1,6 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../features/im/data/im_repository.dart';
+import '../../../../features/im/data/websocket_service.dart';
 import '../../../../shared/widgets/pm_swipe_back.dart';
+import '../../data/career_match_repository.dart';
+import '../../providers/career_match_provider.dart';
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  职业搭子 · 智能匹配（3页流程）
@@ -52,13 +58,13 @@ const List<_Goal> _kGoals = [
 ];
 
 // ── Main Widget ───────────────────────────────────────────────────────────────
-class CareerMatchScreen extends StatefulWidget {
+class CareerMatchScreen extends ConsumerStatefulWidget {
   const CareerMatchScreen({super.key});
   @override
-  State<CareerMatchScreen> createState() => _CareerMatchScreenState();
+  ConsumerState<CareerMatchScreen> createState() => _CareerMatchScreenState();
 }
 
-class _CareerMatchScreenState extends State<CareerMatchScreen> {
+class _CareerMatchScreenState extends ConsumerState<CareerMatchScreen> {
   int _page = 0;
 
   // P1 state
@@ -66,87 +72,196 @@ class _CareerMatchScreenState extends State<CareerMatchScreen> {
   final Set<int> _goals  = {0};
   int _exp = 1;
 
-  // P2 state
+  // P2 animation state
   final Set<int> _visible = {};
   int _phaseIdx = 0;
   final List<Timer> _timers = [];
 
-  // P3 state
-  int _score = 0;
+  // P3 score counter state
+  int _displayScore = 0;
   Timer? _scoreTimer;
 
+  // WS subscription
+  StreamSubscription<Map<String, dynamic>>? _wsSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _listenWs();
+  }
+
+  void _listenWs() {
+    final wsService = ref.read(wsServiceProvider);
+    _wsSub = wsService.messages.listen((msg) {
+      if (msg['type'] == 'career_match_found') {
+        final result = CareerMatchResult(
+          matched:           true,
+          matchedUserId:     msg['matched_user_id'] as String?,
+          username:          msg['username'] as String?,
+          avatarUrl:         msg['avatar_url'] as String?,
+          careerRole:        msg['career_role'] as String?,
+          company:           msg['company'] as String?,
+          experience:        msg['experience'] as String?,
+          score:             (msg['score'] as num?)?.toInt(),
+          commonSkills:      (msg['common_skills'] as List<dynamic>?)
+                                 ?.map((e) => e as String).toList(),
+          commonSkillCount:  (msg['common_skill_count'] as num?)?.toInt(),
+          commonGoalCount:   (msg['common_goal_count'] as num?)?.toInt(),
+          collabSuggestions: (msg['collab_suggestions'] as List<dynamic>?)
+                                 ?.map((e) => e as String).toList(),
+        );
+        ref.read(careerMatchProvider.notifier).onMatchFound(result);
+      }
+    });
+  }
+
+  List<String> get _selectedFieldNames =>
+      _fields.map((i) => _kFields[i]).toList();
+
+  List<String> get _selectedGoalNames =>
+      _goals.map((i) => _kGoals[i].name).toList();
+
+  String get _selectedExp => _kExps[_exp];
+
   void _startMatch() {
-    for (final t in _timers) t.cancel();
+    for (final t in _timers) { t.cancel(); }
     _timers.clear();
     setState(() { _page = 1; _visible.clear(); _phaseIdx = 0; });
+    _runAnimation();
 
-    // Schedule node appearances
+    ref.read(careerMatchProvider.notifier).join(
+      fields:     _selectedFieldNames,
+      goals:      _selectedGoalNames,
+      experience: _selectedExp,
+    );
+  }
+
+  void _runAnimation() {
     for (int i = 0; i < _kNodes.length; i++) {
       final i0 = i;
       _timers.add(Timer(Duration(milliseconds: _kNodes[i0].delay),
           () { if (mounted) setState(() => _visible.add(i0)); }));
     }
-    // Schedule phase updates
     for (int i = 0; i < _kPhases.length; i++) {
       final i0 = i;
       _timers.add(Timer(Duration(milliseconds: _kPhases[i0].t),
           () { if (mounted) setState(() => _phaseIdx = i0); }));
     }
-    // Completion
-    _timers.add(Timer(const Duration(milliseconds: 5400), () {
-      if (!mounted) return;
-      setState(() { _page = 2; _score = 0; });
-      _scoreTimer?.cancel();
-      _scoreTimer = Timer.periodic(const Duration(milliseconds: 20), (t) {
-        if (!mounted) { t.cancel(); return; }
-        setState(() { if (_score < 92) _score = (_score + 4).clamp(0, 92); });
-        if (_score >= 92) t.cancel();
-      });
-    }));
   }
 
-  void _goHome() {
-    for (final t in _timers) t.cancel();
+  void _cancelMatch() {
+    for (final t in _timers) { t.cancel(); }
     _timers.clear();
     _scoreTimer?.cancel();
+    ref.read(careerMatchProvider.notifier).leave();
     if (mounted) setState(() => _page = 0);
+  }
+
+  void _showResult(int targetScore) {
+    _scoreTimer?.cancel();
+    _displayScore = 0;
+    _scoreTimer = Timer.periodic(const Duration(milliseconds: 20), (t) {
+      if (!mounted) { t.cancel(); return; }
+      setState(() {
+        if (_displayScore < targetScore) {
+          _displayScore = (_displayScore + 4).clamp(0, targetScore);
+        }
+      });
+      if (_displayScore >= targetScore) t.cancel();
+    });
+  }
+
+  Future<void> _sendCard(CareerMatchResult result) async {
+    if (result.matchedUserId == null) return;
+    try {
+      final imRepo = ref.read(imRepositoryProvider);
+      final convId = await imRepo.createConversation(result.matchedUserId!);
+      if (!mounted) return;
+      context.push('/im/chat/$convId', extra: {
+        'username':       result.username ?? '搭子',
+        'otherAvatarUrl': result.avatarUrl,
+      });
+    } catch (_) {}
   }
 
   @override
   void dispose() {
-    for (final t in _timers) t.cancel();
+    for (final t in _timers) { t.cancel(); }
     _scoreTimer?.cancel();
+    _wsSub?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return PmSwipeBack(
+    final matchState = ref.watch(careerMatchProvider);
+
+    // 匹配成功时切换到结果页
+    ref.listen<CareerMatchState>(careerMatchProvider, (prev, next) {
+      if (next.status == CareerMatchStatus.matched && _page != 2) {
+        for (final t in _timers) { t.cancel(); }
+        _timers.clear();
+        setState(() { _page = 2; });
+        _showResult(next.result?.score ?? 92);
+      }
+    });
+
+    return PopScope(
+      canPop: _page == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_page == 1) {
+          _cancelMatch();
+        } else {
+          ref.read(careerMatchProvider.notifier).reset();
+          setState(() => _page = 0);
+        }
+      },
       child: Scaffold(
         backgroundColor: _lightBg,
         body: switch (_page) {
-          0 => _SetupPage(
-              fields: _fields, goals: _goals, exp: _exp,
-              onField: (i) => setState(() =>
-                  _fields.contains(i) ? _fields.remove(i) : _fields.add(i)),
-              onGoal:  (i) => setState(() =>
-                  _goals.contains(i)  ? _goals.remove(i)  : _goals.add(i)),
-              onExp:   (i) => setState(() => _exp = i),
-              onStart: _startMatch,
+          0 => PmSwipeBack(
+              child: _SetupPage(
+                fields: _fields, goals: _goals, exp: _exp,
+                onField: (i) => setState(() =>
+                    _fields.contains(i) ? _fields.remove(i) : _fields.add(i)),
+                onGoal:  (i) => setState(() =>
+                    _goals.contains(i)  ? _goals.remove(i)  : _goals.add(i)),
+                onExp:   (i) => setState(() => _exp = i),
+                onStart: _startMatch,
+              ),
             ),
           1 => _MatchingPage(
-              visible: _visible,
+              visible:  _visible,
               phase:    _kPhases[_phaseIdx].phase,
               detail:   _kPhases[_phaseIdx].detail,
               progress: _kPhases[_phaseIdx].pct,
-              onCancel: _goHome,
+              onCancel: _cancelMatch,
             ),
           _ => _MatchedPage(
-              score: _score,
-              onSendCard:    () {},
-              onViewProfile: () {},
-              onNext:        _startMatch,
-              onHome:        _goHome,
+              score:  _displayScore,
+              result: matchState.result,
+              onSendCard: () {
+                if (matchState.result != null) _sendCard(matchState.result!);
+              },
+              onViewProfile: () {
+                final uid = matchState.result?.matchedUserId;
+                if (uid != null) {
+                  context.push('/buddy/user/$uid', extra: {
+                    'username':  matchState.result?.username,
+                    'avatarUrl': matchState.result?.avatarUrl,
+                  });
+                }
+              },
+              onNext: () {
+                ref.read(careerMatchProvider.notifier).next();
+                setState(() { _page = 1; _visible.clear(); _phaseIdx = 0; });
+                _runAnimation();
+              },
+              onHome: () {
+                ref.read(careerMatchProvider.notifier).reset();
+                setState(() => _page = 0);
+              },
             ),
         },
       ),
@@ -447,6 +562,7 @@ class _NetworkPainter extends CustomPainter {
 // ─────────────────────────────────────────────────────────────────────────────
 class _MatchedPage extends StatelessWidget {
   final int score;
+  final CareerMatchResult? result;
   final VoidCallback onSendCard;
   final VoidCallback onViewProfile;
   final VoidCallback onNext;
@@ -454,14 +570,21 @@ class _MatchedPage extends StatelessWidget {
 
   const _MatchedPage({
     required this.score,
+    required this.result,
     required this.onSendCard, required this.onViewProfile,
     required this.onNext, required this.onHome,
   });
 
   @override
   Widget build(BuildContext context) {
-    final top = MediaQuery.of(context).padding.top;
-    final bot = MediaQuery.of(context).padding.bottom;
+    final top      = MediaQuery.of(context).padding.top;
+    final bot      = MediaQuery.of(context).padding.bottom;
+    final name     = result?.username ?? '搭子';
+    final roleText = [
+      result?.careerRole,
+      result?.experience != null ? '${result!.experience}经验' : null,
+    ].whereType<String>().join(' · ');
+
     return SizedBox.expand(
       child: Column(children: [
         // ── Navy Header ──
@@ -481,20 +604,20 @@ class _MatchedPage extends StatelessWidget {
               Expanded(child: Divider(color: Colors.white.withAlpha(25), thickness: 1)),
             ]),
             const SizedBox(height: 14),
-            // Two avatars + 92% badge
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              _HeaderAvatar(label: '我 · PM', darker: false),
+              _HeaderAvatar(label: '我', darker: false),
               const SizedBox(width: 12),
               _MatchBadge(score: score),
               const SizedBox(width: 12),
-              _HeaderAvatar(label: '林晓 · PM', darker: true),
+              _HeaderAvatar(label: name, darker: true),
             ]),
             const SizedBox(height: 14),
-            const Text('林晓',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: Colors.white)),
+            Text(name,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: Colors.white)),
             const SizedBox(height: 3),
-            Text('高级产品经理 · 3年经验 · 北京',
-                style: TextStyle(fontSize: 13, color: Colors.white.withAlpha(178))),
+            if (roleText.isNotEmpty)
+              Text(roleText,
+                  style: TextStyle(fontSize: 13, color: Colors.white.withAlpha(178))),
           ]),
         ),
         // ── Scrollable Body ──
@@ -502,14 +625,14 @@ class _MatchedPage extends StatelessWidget {
           child: SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(16, 18, 16, bot + 16),
             child: Column(children: [
-              _InfoCard(score: score),
+              _InfoCard(score: score, result: result),
               const SizedBox(height: 12),
-              const _TimelineCard(),
+              _TimelineCard(suggestions: result?.collabSuggestions),
               const SizedBox(height: 12),
               _ActionButtons(
-                onSendCard: onSendCard,
+                onSendCard:    onSendCard,
                 onViewProfile: onViewProfile,
-                onNext: onNext,
+                onNext:        onNext,
               ),
               GestureDetector(
                 onTap: onHome,
@@ -576,10 +699,19 @@ class _MatchBadge extends StatelessWidget {
 
 class _InfoCard extends StatelessWidget {
   final int score;
-  const _InfoCard({required this.score});
+  final CareerMatchResult? result;
+  const _InfoCard({required this.score, required this.result});
 
   @override
   Widget build(BuildContext context) {
+    final name        = result?.username ?? '搭子';
+    final company     = result?.company;
+    final careerRole  = result?.careerRole;
+    final subText     = [company, careerRole].whereType<String>().join(' · ');
+    final commonSkills     = result?.commonSkills ?? [];
+    final commonSkillCount = result?.commonSkillCount ?? commonSkills.length;
+    final commonGoalCount  = result?.commonGoalCount ?? 0;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -598,7 +730,7 @@ class _InfoCard extends StatelessWidget {
           const SizedBox(width: 11),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              const Text('林晓', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: _navy)),
+              Text(name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: _navy)),
               const SizedBox(width: 7),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -610,30 +742,32 @@ class _InfoCard extends StatelessWidget {
                 ]),
               ),
             ]),
-            const SizedBox(height: 3),
-            const Text('某独角兽公司 · 高级产品经理', style: TextStyle(fontSize: 12, color: _sub)),
+            if (subText.isNotEmpty) ...[
+              const SizedBox(height: 3),
+              Text(subText, style: const TextStyle(fontSize: 12, color: _sub)),
+            ],
           ])),
         ]),
         const SizedBox(height: 12),
         // Score row
         Row(children: [
-          _ScoreItem(num: '$score%', label: '契合度'),
+          _ScoreItem(num: '$score%',           label: '契合度'),
           const SizedBox(width: 8),
-          const _ScoreItem(num: '3', label: '共同技能'),
+          _ScoreItem(num: '$commonSkillCount', label: '共同技能'),
           const SizedBox(width: 8),
-          const _ScoreItem(num: '2', label: '共同目标'),
+          _ScoreItem(num: '$commonGoalCount',  label: '共同目标'),
         ]),
-        const SizedBox(height: 12),
-        // Skills
-        const Text('技能标签', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: _sub)),
-        const SizedBox(height: 7),
-        Wrap(spacing: 6, runSpacing: 6, children: const [
-          _SkillTag('需求分析', common: true),
-          _SkillTag('数据驱动', common: true),
-          _SkillTag('用户研究', common: true),
-          _SkillTag('B端产品',  common: false),
-          _SkillTag('增长黑客', common: false),
-        ]),
+        if (commonSkills.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          const Text('共同技能', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: _sub)),
+          const SizedBox(height: 7),
+          Wrap(
+            spacing: 6, runSpacing: 6,
+            children: commonSkills
+                .map((s) => _SkillTag(s, common: true))
+                .toList(),
+          ),
+        ],
       ]),
     );
   }
@@ -680,10 +814,17 @@ class _SkillTag extends StatelessWidget {
 }
 
 class _TimelineCard extends StatelessWidget {
-  const _TimelineCard();
+  final List<String>? suggestions;
+  const _TimelineCard({required this.suggestions});
+
+  static const _dotColors = [_navy, Color(0xFF378ADD), Color(0xFF4ADE80)];
 
   @override
   Widget build(BuildContext context) {
+    final items = (suggestions?.isNotEmpty == true)
+        ? suggestions!
+        : const ['每周互相分享行业动态', '探讨共同感兴趣的项目'];
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -695,24 +836,14 @@ class _TimelineCard extends StatelessWidget {
         const Text('可以一起做的事',
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: _navy)),
         const SizedBox(height: 8),
-        _TlItem(
-          color: _navy,
-          title: '每周产品复盘',
-          desc: '互相 review 产品决策，提供不同视角',
-          last: false,
-        ),
-        _TlItem(
-          color: const Color(0xFF378ADD),
-          title: '副业项目孵化',
-          desc: '有共同创业想法，可以深入探讨',
-          last: false,
-        ),
-        _TlItem(
-          color: const Color(0xFF4ADE80),
-          title: '行业资讯共享',
-          desc: '互相推送有价值的行业动态与机会',
-          last: true,
-        ),
+        for (int i = 0; i < items.length; i++) ...[
+          _TlItem(
+            color: _dotColors[i % _dotColors.length],
+            title: items[i],
+            desc:  '',
+            last:  i == items.length - 1,
+          ),
+        ],
       ]),
     );
   }
@@ -741,8 +872,10 @@ class _TlItem extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: _navy)),
-            const SizedBox(height: 2),
-            Text(desc, style: const TextStyle(fontSize: 11, color: _sub)),
+            if (desc.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(desc, style: const TextStyle(fontSize: 11, color: _sub)),
+            ],
           ])),
         ]),
       ),
@@ -808,22 +941,6 @@ class _TextBtn extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 //  Shared helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-class _DecCircle extends StatelessWidget {
-  final double size;
-  const _DecCircle(this.size);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size, height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withAlpha(18)),
-      ),
-    );
-  }
-}
 
 class _SecLabel extends StatelessWidget {
   final String text;

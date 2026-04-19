@@ -23,8 +23,6 @@ class _ImScreenState extends ConsumerState<ImScreen>
   late final TabController _tabController;
 
   // ── 编辑模式 ──────────────────────────────────────────────────────────────
-  StreamSubscription<Map<String, dynamic>>? _wsSub;
-
   bool _editMode = false;
   final Set<String> _selected = {};
 
@@ -95,24 +93,16 @@ class _ImScreenState extends ConsumerState<ImScreen>
   }
 
   Future<void> _initWebSocket() async {
+    // WS 连接与消息分发已由全局 wsHandlerProvider 统一处理（PmBottomNav 中 watch）。
+    // 此处仅做保底连接，防止直接深链进入消息 Tab 时 wsHandlerProvider 尚未初始化。
     final tokenStorage = ref.read(tokenStorageProvider);
     final token = await tokenStorage.getAccessToken();
     if (token == null) return;
-    final wsService = ref.read(wsServiceProvider);
-    await wsService.connect(token);
-    _wsSub = wsService.messages.listen((data) {
-      final type = data['type'] as String?;
-      if (type == 'new_message') {
-        ref.read(conversationsProvider.notifier).refresh();
-      } else if (type == 'new_group_message') {
-        ref.read(groupSessionsProvider.notifier).refresh();
-      }
-    });
+    ref.read(wsServiceProvider).connect(token);
   }
 
   @override
   void dispose() {
-    _wsSub?.cancel();
     _tabController.dispose();
     super.dispose();
   }
