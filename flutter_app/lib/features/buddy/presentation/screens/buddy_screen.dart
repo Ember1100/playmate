@@ -1313,31 +1313,127 @@ class _GatherDetailSheet extends ConsumerWidget {
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // ── 活动方式 ──────────────────────────────────────────────
                 _DetailRow(
-                  icon: current.activityMode == 'online' ? Icons.videocam_outlined : Icons.place_outlined,
-                  iconColor: current.activityMode == 'online' ? const Color(0xFF2196F3) : const Color(0xFFFF7A00),
+                  icon: current.activityMode == 'online'
+                      ? Icons.wifi_outlined
+                      : current.activityMode == 'invite'
+                          ? Icons.people_outline
+                          : Icons.place_outlined,
+                  iconColor: current.activityMode == 'online'
+                      ? const Color(0xFF2196F3)
+                      : const Color(0xFFFF7A00),
                   label: '活动方式',
-                  value: current.activityMode == 'online' ? '线上' : '线下',
+                  value: current.activityModeLabel,
                 ),
                 const SizedBox(height: 16),
-                if (current.location != null)
-                  _DetailRow(icon: Icons.location_on_outlined, iconColor: const Color(0xFFFF7A00), label: '活动地点', value: current.location!),
-                if (current.location != null) const SizedBox(height: 16),
+
+                // ── 时间 ───────────────────────────────────────────────────
                 _buildTimeRange(current.startTime, current.endTime),
+                if (current.deadline != null) ...[
+                  const SizedBox(height: 16),
+                  _DetailRow(
+                    icon: Icons.timer_outlined,
+                    iconColor: const Color(0xFFE24B4A),
+                    label: '报名截止',
+                    value: '${_fmtDate(current.deadline!)} ${_fmtTime(current.deadline!)}',
+                  ),
+                ],
+                const SizedBox(height: 16),
+
+                // ── 地点 ───────────────────────────────────────────────────
+                if (current.location != null && current.location!.isNotEmpty) ...[
+                  _DetailRow(
+                    icon: Icons.location_on_outlined,
+                    iconColor: const Color(0xFFFF7A00),
+                    label: '活动地点',
+                    value: current.location!,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                if (current.landmark != null && current.landmark!.isNotEmpty) ...[
+                  _DetailRow(
+                    icon: Icons.near_me_outlined,
+                    iconColor: const Color(0xFFAAAAAA),
+                    label: '地标参考',
+                    value: current.landmark!,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // ── 参与信息 ──────────────────────────────────────────────
+                _DetailRow(
+                  icon: Icons.payments_outlined,
+                  iconColor: const Color(0xFF5DCAA5),
+                  label: '费用',
+                  value: current.feeLabel,
+                ),
+                const SizedBox(height: 16),
+                _DetailRow(
+                  icon: Icons.person_outline,
+                  iconColor: const Color(0xFF9C27B0),
+                  label: '适合人群',
+                  value: '${current.ageMin}–${current.ageMax} 岁 · ${['不限', '男生优先', '女生优先'][current.genderPref]}',
+                ),
+                const SizedBox(height: 16),
+
+                // ── 活动说明 ──────────────────────────────────────────────
                 if (current.description != null && current.description!.isNotEmpty) ...[
+                  _DetailRow(
+                    icon: Icons.notes_outlined,
+                    iconColor: const Color(0xFF9C27B0),
+                    label: '活动说明',
+                    value: current.description!,
+                  ),
                   const SizedBox(height: 16),
-                  _DetailRow(icon: Icons.notes_outlined, iconColor: const Color(0xFF9C27B0), label: '活动说明', value: current.description!),
                 ],
+
+                // ── 行程安排 ──────────────────────────────────────────────
+                if (current.schedule != null && current.schedule!.isNotEmpty) ...[
+                  _DetailRow(
+                    icon: Icons.format_list_bulleted_outlined,
+                    iconColor: const Color(0xFF2196F3),
+                    label: '行程安排',
+                    value: current.schedule!,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // ── 氛围标签 ──────────────────────────────────────────────
                 if (current.vibes.isNotEmpty) ...[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: current.vibes.map((v) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF3E8),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFFDDB0)),
+                      ),
+                      child: Text(v, style: const TextStyle(fontSize: 12, color: Color(0xFFFF7A00))),
+                    )).toList(),
+                  ),
                   const SizedBox(height: 16),
-                  Row(children: current.vibes.map((v) => Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: const Color(0xFFFFF3E8), borderRadius: BorderRadius.circular(12)),
-                    child: Text(v, style: const TextStyle(fontSize: 12, color: Color(0xFFFF7A00))),
-                  )).toList()),
                 ],
-                const SizedBox(height: 24),
+
+                // ── 高级设置标记 ──────────────────────────────────────────
+                if (current.requireRealName || current.requireReview || current.allowTransfer) ...[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      if (current.requireRealName)
+                        _badgeChip(Icons.badge_outlined, '需实名认证', const Color(0xFFE8F5E9), const Color(0xFF5DCAA5)),
+                      if (current.requireReview)
+                        _badgeChip(Icons.how_to_reg_outlined, '需审核入组', const Color(0xFFE3F2FD), const Color(0xFF2196F3)),
+                      if (current.allowTransfer)
+                        _badgeChip(Icons.swap_horiz_outlined, '可转让名额', const Color(0xFFF3E5F5), const Color(0xFF9C27B0)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 const Text('参加的搭子', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF333333))),
                 const SizedBox(height: 12),
                 Row(children: [
@@ -1452,6 +1548,21 @@ class _GatherDetailSheet extends ConsumerWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _badgeChip(IconData icon, String label, Color bg, Color fg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: fg),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w500)),
         ],
       ),
     );
