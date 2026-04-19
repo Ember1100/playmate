@@ -78,11 +78,13 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
           createdAt: DateTime.tryParse(data['created_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
         );
 
-        // 过滤掉自己发的消息（已由 WS ack 时的乐观消息处理）
         final senderId = data['sender_id'] as String?;
-        if (senderId == currentUser?.id) return;
-
-        ref.read(groupChatProvider(widget.groupId).notifier).addMessage(msg);
+        if (senderId == currentUser?.id) {
+          // 服务端 echo 回自己的消息：用真实 ID 替换 temp 消息
+          ref.read(groupChatProvider(widget.groupId).notifier).replaceTempOrAdd(msg);
+        } else {
+          ref.read(groupChatProvider(widget.groupId).notifier).addMessage(msg);
+        }
         _scrollToBottom();
       }
     });

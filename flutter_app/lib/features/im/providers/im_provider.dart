@@ -116,10 +116,27 @@ class GroupChatNotifier extends FamilyAsyncNotifier<List<GroupMessage>, String> 
       ref.read(imRepositoryProvider).getGroupMessages(arg);
 
   void addMessage(GroupMessage msg) {
-    state.whenData((list) {
-      if (list.any((m) => m.id == msg.id)) return;
-      state = AsyncData([...list, msg]);
-    });
+    final current = state.valueOrNull ?? [];
+    if (current.any((m) => m.id == msg.id)) return;
+    state = AsyncData([...current, msg]);
+  }
+
+  /// 用服务端确认消息替换 temp 消息；若 temp 已丢失则直接追加
+  void replaceTempOrAdd(GroupMessage msg) {
+    final current = state.valueOrNull ?? [];
+    // 已有相同真实 ID → 去重
+    if (current.any((m) => m.id == msg.id)) return;
+    // 找最近一条 temp 且内容相同的消息（同一发送操作）
+    final tempIdx = current.lastIndexWhere(
+      (m) => m.id.startsWith('temp_') && m.content == msg.content,
+    );
+    if (tempIdx != -1) {
+      final updated = List<GroupMessage>.from(current);
+      updated[tempIdx] = msg;
+      state = AsyncData(updated);
+    } else {
+      state = AsyncData([...current, msg]);
+    }
   }
 }
 
