@@ -1568,8 +1568,18 @@ class _PublishGatherSheetState extends ConsumerState<_PublishGatherSheet> {
     }
   }
 
-  void _showErr(String msg) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  void _showErr(String msg) => showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      content: Text(msg, style: const TextStyle(fontSize: 14)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('知道了', style: TextStyle(color: Color(0xFFFF7A00))),
+        ),
+      ],
+    ),
+  );
 
   // ── 时间格式化 ────────────────────────────────────────────────────────────
 
