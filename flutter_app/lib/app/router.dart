@@ -15,6 +15,7 @@ import '../features/fun/presentation/screens/fun_screen.dart';
 import '../features/im/presentation/screens/chat_screen.dart';
 import '../features/im/presentation/screens/group_chat_screen.dart';
 import '../features/im/presentation/screens/im_screen.dart';
+import '../features/im/presentation/screens/im_search_screen.dart';
 import '../features/market/presentation/screens/market_screen.dart';
 import '../features/profile/presentation/screens/edit_profile_screen.dart';
 import '../features/profile/presentation/screens/profile_screen.dart';
@@ -74,37 +75,37 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/auth/register',      builder: (_, _) => const RegisterScreen()),
       GoRoute(path: '/auth/questionnaire', builder: (_, _) => const QuestionnaireScreen()),
 
-      // ── 通知中心（全屏，从右上角铃铛进入）────────────────────────────────
+      // ── IM 搜索页（顶层路由，覆盖底部导航栏）────────────────────────────
       GoRoute(
-        path:    '/im',
-        builder: (_, _) => const ImScreen(),
-        routes: [
-          GoRoute(
-            path: 'chat/:conversationId',
-            builder: (_, state) {
-              final extra = state.extra as Map<String, dynamic>?;
-              return ChatScreen(
-                conversationId: state.pathParameters['conversationId']!,
-                otherUsername:  extra?['username']  as String? ?? '聊天',
-                otherAvatarUrl: extra?['otherAvatarUrl'] as String?,
-              );
-            },
-          ),
-          GoRoute(
-            path: 'group/:groupId',
-            builder: (_, state) {
-              final extra = state.extra as Map<String, dynamic>?;
-              return GroupChatScreen(
-                groupId:     state.pathParameters['groupId']!,
-                groupName:   extra?['groupName']   as String? ?? '群聊',
-                memberCount: extra?['memberCount'] as int?,
-              );
-            },
-          ),
-        ],
+        path:    '/im/search',
+        builder: (_, _) => const ImSearchScreen(),
       ),
 
-      // ── 我的（全屏，从右上角头像按钮进入）───────────────────────────────
+      // ── 聊天页 / 群聊页（顶层路由，push 后覆盖底部导航栏）────────────────
+      GoRoute(
+        path: '/im/chat/:conversationId',
+        builder: (_, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return ChatScreen(
+            conversationId: state.pathParameters['conversationId']!,
+            otherUsername:  extra?['username']  as String? ?? '聊天',
+            otherAvatarUrl: extra?['otherAvatarUrl'] as String?,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/im/group/:groupId',
+        builder: (_, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return GroupChatScreen(
+            groupId:     state.pathParameters['groupId']!,
+            groupName:   extra?['groupName']   as String? ?? '群聊',
+            memberCount: extra?['memberCount'] as int?,
+          );
+        },
+      ),
+
+      // ── 我的（全屏，从应用内入口进入）──────────────────────────────────
       GoRoute(
         path:    '/profile',
         builder: (_, _) => const ProfileScreen(),
@@ -126,7 +127,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // ── 主 Shell（4 个 Tab：圈子 / 集市 / 搭子 / 趣玩）─────────────────
+      // ── 主 Shell（5 个 Tab：圈子 / 集市 / 搭子 / 趣玩 / 消息）──────────
       StatefulShellRoute.indexedStack(
         builder: (_, _, shell) => PmBottomNav(shell: shell),
         branches: [
@@ -205,6 +206,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           // Tab 3：趣玩
           StatefulShellBranch(routes: [
             GoRoute(path: '/fun', builder: (_, _) => const FunScreen()),
+          ]),
+
+          // Tab 4：消息
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/im', builder: (_, _) => const ImScreen()),
           ]),
         ],
       ),

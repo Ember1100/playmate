@@ -37,7 +37,12 @@
       "Bash(jobs)",
       "Bash(npx uni:*)",
       "Bash(grep:*)",
-      "Bash(sqlx migrate:*)"
+      "Bash(sqlx migrate:*)",
+      "Bash(flutter build:*)",
+      "Bash(find:*)",
+      "Bash(DATABASE_URL=postgres://playmate:playmate@localhost:5432/playmate cargo check --package playmate-buddy)",
+      "Bash(SQLX_OFFLINE=true cargo check --package playmate-buddy)",
+      "Bash(SQLX_OFFLINE=true cargo check --package playmate-gateway)"
     ]
   }
 }

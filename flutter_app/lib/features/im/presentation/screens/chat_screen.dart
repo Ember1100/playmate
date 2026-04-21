@@ -401,7 +401,7 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final timeStr = DateFormat('HH:mm').format(message.createdAt);
+    final timeStr = _formatMsgTime(message.createdAt);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -513,4 +513,14 @@ class _MessageBubble extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatMsgTime(DateTime dt) {
+  final now   = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final that  = DateTime(dt.year, dt.month, dt.day);
+  final days  = today.difference(that).inDays;
+  if (days == 0) return DateFormat('HH:mm').format(dt);
+  if (days == 1) return '昨天 ${DateFormat('HH:mm').format(dt)}';
+  return DateFormat('yyyy-MM-dd HH:mm:ss').format(dt);
 }

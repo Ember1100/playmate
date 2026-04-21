@@ -122,12 +122,13 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   }
 
   String _formatTime(DateTime dt) {
-    final now  = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inDays == 0)   return DateFormat('HH:mm').format(dt);
-    if (diff.inDays == 1)   return '昨天 ${DateFormat('HH:mm').format(dt)}';
-    if (diff.inDays < 7)    return '${['日','一','二','三','四','五','六'][dt.weekday % 7]}曜 ${DateFormat('HH:mm').format(dt)}';
-    return DateFormat('MM月dd日 HH:mm').format(dt);
+    final now   = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final that  = DateTime(dt.year, dt.month, dt.day);
+    final days  = today.difference(that).inDays;
+    if (days == 0) return DateFormat('HH:mm').format(dt);
+    if (days == 1) return '昨天 ${DateFormat('HH:mm').format(dt)}';
+    return DateFormat('yyyy-MM-dd HH:mm:ss').format(dt);
   }
 
   void _sendText() {

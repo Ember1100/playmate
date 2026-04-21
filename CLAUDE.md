@@ -375,6 +375,8 @@ type 值：`system` / `buddy_request` / `invitation` / `interaction`
 
 ### 会话列表（消息 Tab）
 
+- 顶部分类 Tab（聊天 / 互动 / 交易 / 活动 / 系统通知）使用自定义 `_SpacedTabBar`：`Row` + `MainAxisAlignment.spaceBetween` + 左右 16px 边距，首末两项贴边、中间均匀分布；选中项下方显示 20px 宽短下划线
+- 左上角头像点击打开 `Drawer`，「个人主页」入口跳转 `/profile/edit`（完整个人信息页），不是 `/profile`
 - 私信（DM）与群聊（Group）合并为一个列表，按 `last_message_at` 倒序排列
 - 群聊头像右下角显示橙色「群」小标记
 - 编辑模式（点击右上角「编辑」进入）：
@@ -390,6 +392,7 @@ type 值：`system` / `buddy_request` / `invitation` / `interaction`
 - `type === 99`（系统消息）居中灰色展示，不显示头像和气泡
 - 其他消息：自己靠右，他人靠左；他人消息气泡上方显示发送者昵称
 - 头像颜色池：按 `senderId` 哈希固定取色，避免每次渲染颜色跳变
+- 消息时间格式（私聊 + 群聊）：按自然日分界，今天 `HH:mm`，昨天 `昨天 HH:mm`，更早 `yyyy-MM-dd HH:mm:ss`
 
 ### Bottom Sheet 规范
 

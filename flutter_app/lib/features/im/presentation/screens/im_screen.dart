@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../../../app/theme.dart';
 import '../../../../core/api/api_client.dart';
 import '../../../../shared/widgets/pm_image.dart';
+import '../../../auth/providers/auth_provider.dart';
 import '../../data/im_model.dart';
 import '../../data/websocket_service.dart';
 import '../../providers/im_provider.dart';
@@ -21,9 +22,9 @@ class ImScreen extends ConsumerStatefulWidget {
 
 class _ImScreenState extends ConsumerState<ImScreen>
     with SingleTickerProviderStateMixin {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   late final TabController _tabController;
 
-  // 编辑模式（聊天 Tab）
   bool _editMode = false;
   final Set<String> _selected = {};
 
@@ -50,6 +51,7 @@ class _ImScreenState extends ConsumerState<ImScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: _tabs.length, vsync: this);
+    _tabController.addListener(() => setState(() {}));
     _initWebSocket();
   }
 
@@ -105,64 +107,63 @@ class _ImScreenState extends ConsumerState<ImScreen>
     final conversationsAsync = ref.watch(conversationsProvider);
     final groupSessionsAsync  = ref.watch(groupSessionsProvider);
     final notificationsAsync  = ref.watch(notificationsProvider);
+    final user   = ref.watch(currentUserProvider);
     final notifs = notificationsAsync.valueOrNull ?? [];
 
-    final systemUnread   = notifs.where((n) => n.type == NotificationType.system && !n.isRead).length;
     final interactUnread = notifs.where((n) =>
         n.type == NotificationType.interaction ||
         n.type == NotificationType.buddyRequest ||
         n.type == NotificationType.invitation).where((n) => !n.isRead).length;
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: const Color(0xFFF6F6F6),
+      drawer: _ProfileDrawer(user: user),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Color(0xFF333333)),
-          onPressed: () => context.pop(),
+        automaticallyImplyLeading: false,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: GestureDetector(
+            onTap: () => _scaffoldKey.currentState?.openDrawer(),
+            child: _AppBarAvatar(
+              username:  user?.username,
+              avatarUrl: user?.avatarUrl,
+            ),
+          ),
         ),
-        title: const Text(
-          '通知中心',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Color(0xFF1A1A1A)),
-        ),
+        title: const Text('消息',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Color(0xFF1A1A1A))),
         actions: [
-          TextButton(
-            onPressed: _clearAllRead,
-            child: const Text('清空已读', style: TextStyle(fontSize: 12, color: Color(0xFF888888))),
-          ),
           IconButton(
-            icon: const Icon(Icons.settings_outlined, size: 20, color: Color(0xFF888888)),
-            onPressed: () => context.push('/profile/settings'),
+            icon: const Icon(Icons.search_rounded, size: 22, color: Color(0xFF444444)),
+            onPressed: () => context.push('/im/search'),
           ),
+          if (_editMode)
+            TextButton(
+              onPressed: _toggleEdit,
+              child: const Text('完成',
+                  style: TextStyle(fontSize: 14, color: AppColors.primary, fontWeight: FontWeight.w600)),
+            )
+          else if (_tabController.index != 0)
+            TextButton(
+              onPressed: _clearAllRead,
+              child: const Text('清空已读', style: TextStyle(fontSize: 14, color: Color(0xFF888888))),
+            ),
+          const SizedBox(width: 4),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(41),
+          preferredSize: const Size.fromHeight(46),
           child: Container(
             decoration: const BoxDecoration(
               color: Colors.white,
               border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE), width: 0.5)),
             ),
-            child: TabBar(
-              controller:           _tabController,
-              isScrollable:         true,
-              tabAlignment:         TabAlignment.start,
-              labelColor:           const Color(0xFF1A1A1A),
-              unselectedLabelColor: const Color(0xFF888888),
-              labelStyle:           const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-              unselectedLabelStyle: const TextStyle(fontSize: 13),
-              indicator: const UnderlineTabIndicator(
-                borderSide: BorderSide(width: 2, color: Color(0xFF1A1A1A)),
-                insets: EdgeInsets.symmetric(horizontal: 8),
-              ),
-              dividerColor: Colors.transparent,
-              tabs: [
-                const Tab(text: '聊天'),
-                _InlineBadgeTab(label: '互动', count: interactUnread),
-                const Tab(text: '交易'),
-                const Tab(text: '活动'),
-                _InlineBadgeTab(label: '系统通知', count: systemUnread),
-              ],
+            child: _SpacedTabBar(
+              controller: _tabController,
+              interactUnread: interactUnread,
+              labels: const ['聊天', '互动', '交易', '活动', '系统通知'],
             ),
           ),
         ),
@@ -242,32 +243,18 @@ class _ImScreenState extends ConsumerState<ImScreen>
           ref.read(groupSessionsProvider.notifier).refresh(),
         ]);
       },
-      child: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        children: [
-          // 编辑按钮行
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('私信 & 群聊',
-                    style: const TextStyle(fontSize: 11, color: Color(0xFFAAAAAA), fontWeight: FontWeight.w500)),
-                GestureDetector(
-                  onTap: _toggleEdit,
-                  child: Text(
-                    _editMode ? '完成' : '编辑',
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF888888)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (sessions.isEmpty)
-            _buildEmptyTab('暂无消息，去找个搭伴聊聊吧', Icons.chat_bubble_outline)
-          else
-            ...sessions.asMap().entries.map((e) => _buildSessionRow(e.key, e.value)),
-        ],
+      child: ListView.separated(
+        padding: EdgeInsets.zero,
+        itemCount: sessions.isEmpty ? 1 : sessions.length,
+        separatorBuilder: (_, __) => const Divider(
+          height: 0.5, thickness: 0.5, indent: 78, color: Color(0xFFEEEEEE),
+        ),
+        itemBuilder: (_, i) {
+          if (sessions.isEmpty) {
+            return _buildEmptyTab('暂无消息，去找个搭伴聊聊吧', Icons.chat_bubble_outline);
+          }
+          return _buildSessionRow(i, sessions[i]);
+        },
       ),
     );
   }
@@ -276,92 +263,100 @@ class _ImScreenState extends ConsumerState<ImScreen>
     final (bg, fg) = _avatarColor(item.name);
     final isChecked = _selected.contains(item.id);
 
-    return Column(
-      children: [
-        InkWell(
-          onTap: () {
-            if (_editMode) { _toggleSelect(item.id); return; }
-            if (item.type == _SessionType.dm) {
-              ref.read(conversationsProvider.notifier).clearUnread(item.id);
-              context.push('/im/chat/${item.id}', extra: {
-                'username': item.name,
-                'otherUserId': item.otherId,
-              });
-            } else {
-              context.push('/im/group/${item.id}', extra: {'groupName': item.name});
-            }
-          },
-          child: Container(
-            color: isChecked ? AppColors.primaryLight.withValues(alpha: 0.5) : Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              children: [
-                // 编辑模式复选框
-                if (_editMode) ...[
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    width: 22, height: 22,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isChecked ? AppColors.primary : Colors.transparent,
-                      border: Border.all(
-                        color: isChecked ? AppColors.primary : const Color(0xFFBBBBBB),
-                        width: 2,
-                      ),
-                    ),
-                    child: isChecked ? const Icon(Icons.check, size: 12, color: Colors.white) : null,
+    return InkWell(
+      onTap: () {
+        if (_editMode) { _toggleSelect(item.id); return; }
+        if (item.type == _SessionType.dm) {
+          ref.read(conversationsProvider.notifier).clearUnread(item.id);
+          context.push('/im/chat/${item.id}', extra: {
+            'username': item.name,
+            'otherUserId': item.otherId,
+          });
+        } else {
+          context.push('/im/group/${item.id}', extra: {'groupName': item.name});
+        }
+      },
+      onLongPress: () {
+        if (!_editMode) {
+          setState(() { _editMode = true; });
+        }
+        _toggleSelect(item.id);
+      },
+      child: Container(
+        color: isChecked ? AppColors.primaryLight.withValues(alpha: 0.5) : Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            // 编辑模式复选框
+            if (_editMode) ...[
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 22, height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isChecked ? AppColors.primary : Colors.transparent,
+                  border: Border.all(
+                    color: isChecked ? AppColors.primary : const Color(0xFFBBBBBB),
+                    width: 2,
                   ),
-                  const SizedBox(width: 10),
-                ],
-                // 未读点
-                SizedBox(
-                  width: 11,
-                  child: item.unreadCount > 0
-                      ? Container(width: 7, height: 7,
-                          decoration: const BoxDecoration(color: Color(0xFFE24B4A), shape: BoxShape.circle))
-                      : null,
                 ),
-                const SizedBox(width: 4),
-                // 头像
-                _AvatarCircle(
-                  label: item.avatarUrl != null ? '' : (item.name.isNotEmpty ? item.name[0] : '?'),
-                  imageUrl: item.avatarUrl,
-                  bg: bg, fg: fg, size: 36,
-                  badge: item.type == _SessionType.group
-                      ? const Icon(Icons.people, size: 10, color: Colors.white)
-                      : null,
-                ),
-                const SizedBox(width: 10),
-                // 内容
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                child: isChecked ? const Icon(Icons.check, size: 12, color: Colors.white) : null,
+              ),
+              const SizedBox(width: 12),
+            ],
+            // 头像
+            _AvatarCircle(
+              label: item.avatarUrl != null ? '' : (item.name.isNotEmpty ? item.name[0] : '?'),
+              imageUrl: item.avatarUrl,
+              bg: bg, fg: fg, size: 46,
+              badge: item.type == _SessionType.group
+                  ? const Icon(Icons.people, size: 11, color: Colors.white)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            // 内容
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(item.name,
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500,
-                                    color: Color(0xFF1A1A1A)),
-                                overflow: TextOverflow.ellipsis),
-                          ),
-                          Text(_formatTime(item.lastMessageAt),
-                              style: const TextStyle(fontSize: 11, color: Color(0xFFAAAAAA))),
-                        ],
+                      Expanded(
+                        child: Text(item.name,
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500,
+                                color: Color(0xFF1A1A1A)),
+                            overflow: TextOverflow.ellipsis),
                       ),
-                      const SizedBox(height: 2),
-                      Text(item.lastMessage ?? '',
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF888888)),
-                          maxLines: 2, overflow: TextOverflow.ellipsis),
+                      Text(_formatTime(item.lastMessageAt),
+                          style: const TextStyle(fontSize: 12, color: Color(0xFFAAAAAA))),
                     ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 3),
+                  Text(item.lastMessage ?? '',
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF888888)),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+            // 未读数徽标
+            if (item.unreadCount > 0 && !_editMode)
+              Container(
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE24B4A),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Text(
+                  item.unreadCount > 99 ? '99+' : '${item.unreadCount}',
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600, height: 1.4),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+          ],
         ),
-        const Divider(height: 0.5, thickness: 0.5, indent: 64, color: Color(0xFFEEEEEE)),
-      ],
+      ),
     );
   }
 
@@ -461,24 +456,30 @@ class _ImScreenState extends ConsumerState<ImScreen>
           },
           child: Container(
             color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 未读点
-                SizedBox(
-                  width: 11,
-                  child: !n.isRead
-                      ? Container(
-                          width: 7, height: 7, margin: const EdgeInsets.only(top: 5),
-                          decoration: const BoxDecoration(color: Color(0xFFE24B4A), shape: BoxShape.circle),
-                        )
-                      : null,
+                // 头像（未读红点叠加在右上角）
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    _AvatarCircle(label: initial, bg: bg, fg: fg, size: 44),
+                    if (!n.isRead)
+                      Positioned(
+                        top: -1, right: -1,
+                        child: Container(
+                          width: 9, height: 9,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE24B4A),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                // 头像圆圈
-                _AvatarCircle(label: initial, bg: bg, fg: fg, size: 36),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 // 内容
                 Expanded(
                   child: Column(
@@ -488,20 +489,20 @@ class _ImScreenState extends ConsumerState<ImScreen>
                         children: [
                           Expanded(
                             child: Text(n.title,
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500,
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500,
                                     color: Color(0xFF1A1A1A)),
                                 overflow: TextOverflow.ellipsis),
                           ),
                           Text(_formatTime(n.createdAt),
-                              style: const TextStyle(fontSize: 11, color: Color(0xFFAAAAAA))),
+                              style: const TextStyle(fontSize: 12, color: Color(0xFFAAAAAA))),
                         ],
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       Text(n.content,
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF888888), height: 1.5),
+                          style: const TextStyle(fontSize: 13, color: Color(0xFF888888), height: 1.5),
                           maxLines: 2, overflow: TextOverflow.ellipsis),
                       if (tagLabel != null) ...[
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 5),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
@@ -509,7 +510,7 @@ class _ImScreenState extends ConsumerState<ImScreen>
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(tagLabel,
-                              style: TextStyle(fontSize: 11, color: tagColor, fontWeight: FontWeight.w500)),
+                              style: TextStyle(fontSize: 12, color: tagColor, fontWeight: FontWeight.w500)),
                         ),
                       ],
                     ],
@@ -519,7 +520,7 @@ class _ImScreenState extends ConsumerState<ImScreen>
             ),
           ),
         ),
-        const Divider(height: 0.5, thickness: 0.5, indent: 64, color: Color(0xFFEEEEEE)),
+        const Divider(height: 0.5, thickness: 0.5, indent: 72, color: Color(0xFFEEEEEE)),
       ],
     );
   }
@@ -657,6 +658,64 @@ class _AvatarCircle extends StatelessWidget {
   }
 }
 
+class _SpacedTabBar extends StatelessWidget {
+  const _SpacedTabBar({
+    required this.controller,
+    required this.labels,
+    required this.interactUnread,
+  });
+
+  final TabController controller;
+  final List<String>  labels;
+  final int           interactUnread;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (_, _) => SizedBox(
+        height: 46,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(labels.length, (i) {
+              final selected = controller.index == i;
+              final color    = selected ? const Color(0xFF1A1A1A) : const Color(0xFF888888);
+              final child    = i == 1
+                  ? _InlineBadgeTab(label: labels[i], count: interactUnread)
+                  : Text(labels[i]);
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => controller.animateTo(i),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    DefaultTextStyle(
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
+                        color: color,
+                      ),
+                      child: child,
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 2,
+                      width: selected ? 20 : 0,
+                      color: const Color(0xFF1A1A1A),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _InlineBadgeTab extends StatelessWidget {
   const _InlineBadgeTab({required this.label, required this.count});
   final String label;
@@ -664,27 +723,25 @@ class _InlineBadgeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tab(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label),
-          if (count > 0) ...[
-            const SizedBox(width: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE24B4A),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                count > 99 ? '99+' : '$count',
-                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
-              ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label),
+        if (count > 0) ...[
+          const SizedBox(width: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE24B4A),
+              borderRadius: BorderRadius.circular(8),
             ),
-          ],
+            child: Text(
+              count > 99 ? '99+' : '$count',
+              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
+            ),
+          ),
         ],
-      ),
+      ],
     );
   }
 }
@@ -720,4 +777,160 @@ class _Color {
   const _Color(this.value);
   final int value;
   Color toColor() => Color(value);
+}
+
+// ── AppBar 头像 ───────────────────────────────────────────────────────────────
+
+class _AppBarAvatar extends StatelessWidget {
+  const _AppBarAvatar({this.username, this.avatarUrl});
+
+  final String? username;
+  final String? avatarUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = (username?.isNotEmpty == true) ? username![0].toUpperCase() : '我';
+    return CircleAvatar(
+      radius: 17,
+      backgroundColor: AppColors.primaryLight,
+      backgroundImage: avatarUrl != null ? PmImageProvider(avatarUrl!) : null,
+      child: avatarUrl == null
+          ? Text(initial, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))
+          : null,
+    );
+  }
+}
+
+// ── 我的 左侧 Drawer ──────────────────────────────────────────────────────────
+
+class _ProfileDrawer extends StatelessWidget {
+  const _ProfileDrawer({this.user});
+
+  final dynamic user;
+
+  @override
+  Widget build(BuildContext context) {
+    final username  = (user?.username as String?) ?? '我';
+    final avatarUrl = user?.avatarUrl as String?;
+    final bio       = user?.bio as String?;
+    final city      = user?.city as String?;
+    final initial   = username.isNotEmpty ? username[0].toUpperCase() : '我';
+    final topPad    = MediaQuery.paddingOf(context).top;
+
+    return Drawer(
+      width: 280,
+      backgroundColor: const Color(0xFFFFF8EC),
+      child: Column(
+        children: [
+          // ── 用户信息头部 ─────────────────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.fromLTRB(20, topPad + 28, 20, 24),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFF7A00),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 头像
+                CircleAvatar(
+                  radius: 32,
+                  backgroundColor: Colors.white.withValues(alpha: 0.3),
+                  backgroundImage: avatarUrl != null ? PmImageProvider(avatarUrl) : null,
+                  child: avatarUrl == null
+                      ? Text(initial, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: Colors.white))
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                Text(username,
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
+                if (bio != null && bio.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(bio,
+                      style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.85)),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                ] else if (city != null && city.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(city,
+                      style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.85))),
+                ],
+              ],
+            ),
+          ),
+
+          // ── 菜单列表 ─────────────────────────────────────────────────────
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              children: [
+                _DrawerItem(
+                  icon: Icons.person_outline_rounded,
+                  label: '个人主页',
+                  onTap: () { Navigator.pop(context); context.push('/profile/edit'); },
+                ),
+                _DrawerItem(
+                  icon: Icons.bookmark_border_rounded,
+                  label: '我的收藏',
+                  onTap: () { Navigator.pop(context); context.push('/profile/collects'); },
+                ),
+                _DrawerItem(
+                  icon: Icons.workspace_premium_outlined,
+                  label: '会员中心',
+                  onTap: () { Navigator.pop(context); context.push('/profile/member'); },
+                ),
+                _DrawerItem(
+                  icon: Icons.trending_up_rounded,
+                  label: '成长报告',
+                  onTap: () { Navigator.pop(context); context.push('/profile/growth-report'); },
+                ),
+                _DrawerItem(
+                  icon: Icons.edit_note_rounded,
+                  label: '学习笔记',
+                  onTap: () { Navigator.pop(context); context.push('/profile/notes'); },
+                ),
+                _DrawerItem(
+                  icon: Icons.feedback_outlined,
+                  label: '需求反馈',
+                  onTap: () { Navigator.pop(context); context.push('/profile/feedback'); },
+                ),
+                _DrawerItem(
+                  icon: Icons.settings_outlined,
+                  label: '设置',
+                  onTap: () { Navigator.pop(context); context.push('/profile/settings'); },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DrawerItem extends StatelessWidget {
+  const _DrawerItem({required this.icon, required this.label, required this.onTap});
+
+  final IconData     icon;
+  final String       label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: const Color(0xFF666666)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(label, style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A))),
+            ),
+            const Icon(Icons.chevron_right, size: 16, color: Color(0xFFCCCCCC)),
+          ],
+        ),
+      ),
+    );
+  }
 }
